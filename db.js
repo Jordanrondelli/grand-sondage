@@ -13,11 +13,17 @@ if (isPostgres) {
     connectionTimeoutMillis: 5000,
   });
 } else {
-  const Database = require('better-sqlite3');
-  sqlite = new Database(process.env.DB_PATH || path.join(__dirname, 'survey.db'));
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('busy_timeout = 5000');
-  sqlite.pragma('synchronous = NORMAL');
+  try {
+    const Database = require('better-sqlite3');
+    sqlite = new Database(process.env.DB_PATH || path.join(__dirname, 'survey.db'));
+    sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('busy_timeout = 5000');
+    sqlite.pragma('synchronous = NORMAL');
+  } catch (err) {
+    console.error('better-sqlite3 not available:', err.message);
+    console.error('Set DATABASE_URL for PostgreSQL or install better-sqlite3');
+    process.exit(1);
+  }
 }
 
 // --- Helpers ---
