@@ -2,74 +2,66 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Le Grand Sondage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Le Sondage</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div id="app">
-    <!-- Welcome Screen -->
-    <div id="screen-welcome" class="screen active">
-      <div class="card welcome-card">
-        <h1 class="title">Le Grand<br><span class="accent">Sondage</span></h1>
-        <p class="subtitle">Aide-nous à construire le jeu !</p>
-        <div class="rules">
-          <div class="rule">
-            <span class="rule-icon">☝️</span>
-            <span>Une seule réponse par question</span>
-          </div>
-          <div class="rule">
-            <span class="rule-icon">⚡</span>
-            <span>Sois spontané, pas de triche</span>
-          </div>
-          <div class="rule">
-            <span class="rule-icon">⏱️</span>
-            <span>30 secondes par question</span>
-          </div>
-        </div>
-        <button id="btn-start" class="btn btn-primary btn-large">Commencer</button>
-      </div>
-    </div>
+  <nav class="nav">
+    <a href="/" class="active">Sondage</a>
+    <a href="/admin">🔒</a>
+  </nav>
 
-    <!-- Question Screen -->
-    <div id="screen-question" class="screen">
-      <div class="card question-card">
-        <div class="timer-container">
-          <div id="timer-bar" class="timer-bar"></div>
-        </div>
-        <div id="timer-text" class="timer-text">30s</div>
-        <div id="question-counter" class="question-counter"></div>
-        <h2 id="question-text" class="question-text"></h2>
-        <form id="answer-form">
-          <input
-            type="text"
-            id="answer-input"
-            class="input"
-            placeholder="Ta réponse..."
-            autocomplete="off"
-            maxlength="200"
-          >
-          <button type="submit" id="btn-submit" class="btn btn-primary">Valider</button>
-        </form>
+  <div id="screen-welcome" class="screen active">
+    <div class="welcome">
+      <div class="emoji">🎤</div>
+      <h1>Le Sondage</h1>
+      <p class="desc">On va te poser des questions. À chaque fois, donne une seule réponse, la première qui te vient.</p>
+      <div class="rules">
+        <div class="rule"><span class="re">⏱️</span><span>30 secondes par question</span></div>
+        <div class="rule"><span class="re">☝️</span><span>Une seule réponse</span></div>
+        <div class="rule"><span class="re">⚡</span><span>Sois spontané</span></div>
       </div>
+      <button class="btn-go" id="btn-start">C'est parti</button>
+      <div class="already" id="already" style="display:none"></div>
     </div>
+  </div>
 
-    <!-- Transition Screen -->
-    <div id="screen-transition" class="screen">
-      <div class="card transition-card">
-        <div class="checkmark">✓</div>
-        <p>Réponse enregistrée !</p>
+  <div id="screen-question" class="screen">
+    <div class="question-screen">
+      <div class="timer-track"><div class="timer-fill green" id="timer-fill"></div></div>
+      <div class="timer-num green" id="timer-num">30</div>
+      <div class="q-text" id="q-text"></div>
+      <div class="answer-row">
+        <input type="text" class="answer-input" id="answer-input" placeholder="Ta réponse..." maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="btn-validate dim" id="btn-validate">Valider</button>
       </div>
+      <div class="hint">Première réponse qui te vient !</div>
+      <div class="fire-count" id="fire-count" style="display:none"></div>
     </div>
+  </div>
 
-    <!-- Done Screen -->
-    <div id="screen-done" class="screen">
-      <div class="card done-card">
-        <div class="done-icon">🎉</div>
-        <h2>Merci !</h2>
-        <p>Tu as répondu à toutes les questions disponibles pour le moment.</p>
-        <p class="done-sub">Les résultats serviront à construire le jeu.</p>
-      </div>
+  <div id="screen-registered" class="screen">
+    <div class="result-screen">
+      <div class="emoji">✅</div>
+      <h2>Enregistré !</h2>
+      <button class="btn-next" id="btn-next-ok">Question suivante →</button>
+    </div>
+  </div>
+
+  <div id="screen-timeout" class="screen">
+    <div class="result-screen">
+      <div class="emoji">⏰</div>
+      <h2>Temps écoulé !</h2>
+      <button class="btn-next" id="btn-next-timeout">Question suivante →</button>
+    </div>
+  </div>
+
+  <div id="screen-done" class="screen">
+    <div class="done-screen">
+      <div class="emoji">🙌</div>
+      <h1>Merci !</h1>
+      <p id="done-text"></p>
     </div>
   </div>
 
