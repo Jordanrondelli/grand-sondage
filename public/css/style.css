@@ -87,6 +87,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 /* Question Editor */
 .editor{background:#0d0d14;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:24px}
+.editor.hidden{display:none}
 .editor h3{font-size:14px;margin-bottom:12px;color:var(--text-light)}
 .club-tabs{display:flex;gap:6px;margin-bottom:14px}
 .club-tab{background:transparent;border:1px solid #333;color:var(--text-gray);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s}
@@ -100,7 +101,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .add-row{display:flex;gap:8px}
 .add-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none;font-family:inherit}
 .add-input::placeholder{color:var(--text-dark)}
-.btn-add{border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;color:#fff}
+.btn-add{border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:var(--red)}
 
 /* Filter pills */
 .filter-pills{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
