@@ -20,16 +20,27 @@ function normalizeAnswer(text) {
 }
 
 function isGibberish(text) {
-  // Too short (single char or 2 chars)
-  if (text.length < 3) return true;
+  const stripped = text.replace(/[\s'''-]/g, '');
+  // Too short
+  if (stripped.length < 3) return true;
   // Only repeated same character: "aaa", "..."
-  if (/^(.)\1+$/.test(text)) return true;
-  // No vowel at all (for strings 3+ chars) — not a real word
-  if (!/[aeiouyàâäéèêëïîôùûüÿœæ]/i.test(text)) return true;
-  // 5+ consonants in a row — keyboard mash like "jdnjizdn"
-  if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(text)) return true;
+  if (/^(.)\1+$/.test(stripped)) return true;
+  // No vowel at all — not a real word
+  if (!/[aeiouyàâäéèêëïîôùûüÿœæ]/i.test(stripped)) return true;
+  // 5+ consonants in a row — keyboard mash
+  if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(stripped)) return true;
   // Same consonant 3+ times in a row: "bbb", "kkk"
-  if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(text)) return true;
+  if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(stripped)) return true;
+  // Single char dominance >50% (for 5+ chars): "ojojooi" → 'o' is 57%
+  if (stripped.length >= 5) {
+    const freq = {};
+    for (const ch of stripped) freq[ch] = (freq[ch] || 0) + 1;
+    if (Math.max(...Object.values(freq)) / stripped.length > 0.5) return true;
+  }
+  // Repeating short pattern 3+ times: "ababab", "hahaha"
+  if (/^(.{1,3})\1{2,}/i.test(stripped)) return true;
+  // Same vowel 3+ times in a row: "ooooj", "aaaa"
+  if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(stripped)) return true;
   return false;
 }
 
