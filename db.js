@@ -68,7 +68,7 @@ async function init() {
   }
 
   const row = await get('SELECT COUNT(*) as c FROM categories');
-  if (row.c === 0) {
+  if (Number(row.c) === 0) {
     const c1 = (await run("INSERT INTO categories (name) VALUES ($1)", ['années 2000'])).lastInsertRowid;
     const c2 = (await run("INSERT INTO categories (name) VALUES ($1)", ['nourriture'])).lastInsertRowid;
     const c3 = (await run("INSERT INTO categories (name) VALUES ($1)", ['cinéma'])).lastInsertRowid;
@@ -101,7 +101,7 @@ async function insertAnswer(qid, text) {
 }
 
 async function getAnswerCount(qid) {
-  return (await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1", [qid])).c;
+  return Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1", [qid])).c);
 }
 
 async function getAllCategories() {
@@ -109,9 +109,10 @@ async function getAllCategories() {
 }
 
 async function getQuestionsWithCounts() {
-  return all(
+  const rows = await all(
     "SELECT q.id, q.text, q.active, q.category_id, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
   );
+  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count) }));
 }
 
 async function getQuestionById(id) {
@@ -119,18 +120,19 @@ async function getQuestionById(id) {
 }
 
 async function getAnswersGrouped(qid) {
-  return all(
+  const rows = await all(
     "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
     [qid]
   );
+  return rows.map(r => ({ ...r, count: Number(r.count) }));
 }
 
 async function getStats() {
-  const totalAnswers = (await get("SELECT COUNT(*) as c FROM answers")).c;
-  const completeQuestions = (await get(
+  const totalAnswers = Number((await get("SELECT COUNT(*) as c FROM answers")).c);
+  const completeQuestions = Number((await get(
     "SELECT COUNT(*) as c FROM questions q WHERE (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) >= $1", [THRESHOLD]
-  )).c;
-  const totalQuestions = (await get("SELECT COUNT(*) as c FROM questions WHERE active = 1")).c;
+  )).c);
+  const totalQuestions = Number((await get("SELECT COUNT(*) as c FROM questions WHERE active = 1")).c);
   return { totalAnswers, completeQuestions, totalQuestions, threshold: THRESHOLD };
 }
 
@@ -162,9 +164,10 @@ async function mergeAnswers(qid, texts, canonical) {
 }
 
 async function getAllAnswersForExport() {
-  return all(
+  const rows = await all(
     "SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text)) ORDER BY q.id, count DESC"
   );
+  return rows.map(r => ({ ...r, count: Number(r.count) }));
 }
 
 async function deleteAllAnswers() {
