@@ -41,7 +41,7 @@ app.use(session({
   resave: false, saveUninitialized: false,
   cookie: { secure: false, httpOnly: true, maxAge: 86400000 }
 }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: false }));
 
 function requireAdmin(req, res, next) {
   if (req.session?.isAdmin) return next();
