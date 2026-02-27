@@ -11,13 +11,47 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'clubsecret2026';
 
 // --- Normalization & Validation ---
 
+// Cache for banned words and corrections (refreshed every 60s)
+let bannedWordsCache = [];
+let correctionsCache = [];
+let cacheTime = 0;
+async function refreshCache() {
+  if (Date.now() - cacheTime < 60000) return;
+  bannedWordsCache = await db.getBannedWords();
+  correctionsCache = await db.getCorrections();
+  cacheTime = Date.now();
+}
+function invalidateCache() { cacheTime = 0; }
+
 function normalizeAnswer(text) {
-  return text
+  let s = text
     .toLowerCase()
     .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\ufe0f]/gu, '')
     .replace(/[^a-zà-ÿ0-9\s''\-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+  // Strip leading articles
+  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une )/i, '').trim();
+  // Strip trailing laugh expressions
+  s = s.replace(/\s+(lol|mdr|haha|xd|ptdr)$/i, '').trim();
+  return s;
+}
+
+function containsBannedWord(text) {
+  const lower = text.toLowerCase();
+  for (const { word } of bannedWordsCache) {
+    if (lower === word || lower.includes(word)) return true;
+  }
+  return false;
+}
+
+function applyCorrections(text) {
+  for (const { wrong, correct } of correctionsCache) {
+    if (text === wrong) return correct;
+    const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    text = text.replace(new RegExp(escaped, 'gi'), correct);
+  }
+  return text.trim();
 }
 
 function isGibberish(text) {
@@ -158,12 +192,20 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
-    const normalized = normalizeAnswer(text);
-    if (!normalized || normalized.length > 120)
-      return res.status(400).json({ error: 'Invalide' });
+    await refreshCache();
+    let normalized = normalizeAnswer(text);
+    if (!normalized || normalized.length < 2 || normalized.length > 50) {
+      await db.incrementRejected(question_id);
+      return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
+    }
     const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 30) ? Math.round(response_time) : null;
-    if (isGibberish(normalized))
-      return res.status(400).json({ error: 'Réponse incohérente' });
+    if (isGibberish(normalized) || containsBannedWord(normalized)) {
+      await db.incrementRejected(question_id);
+      return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
+    }
+
+    // Apply auto-corrections
+    normalized = applyCorrections(normalized);
 
     const count = await db.getAnswerCount(question_id);
     if (count >= db.THRESHOLD)
@@ -267,6 +309,48 @@ app.post('/api/admin/merge', requireAdmin, async (req, res) => {
     await db.mergeAnswers(question_id, answer_texts, canonical_text.trim());
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// --- Banned Words CRUD ---
+
+app.get('/api/admin/banned-words', requireAdmin, async (req, res) => {
+  try { res.json(await db.getBannedWords()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/banned-words', requireAdmin, async (req, res) => {
+  try {
+    const { word } = req.body;
+    if (!word?.trim()) return res.status(400).json({ error: 'Mot requis' });
+    const result = await db.addBannedWord(word.trim().toLowerCase());
+    invalidateCache();
+    res.json(result);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/admin/banned-words/:id', requireAdmin, async (req, res) => {
+  try { await db.deleteBannedWord(req.params.id); invalidateCache(); res.json({ ok: true }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// --- Corrections CRUD ---
+
+app.get('/api/admin/corrections', requireAdmin, async (req, res) => {
+  try { res.json(await db.getCorrections()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/corrections', requireAdmin, async (req, res) => {
+  try {
+    const { wrong, correct } = req.body;
+    if (!wrong?.trim() || !correct?.trim()) return res.status(400).json({ error: 'Requis' });
+    const result = await db.addCorrection(wrong.trim().toLowerCase(), correct.trim().toLowerCase());
+    invalidateCache();
+    res.json(result);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/admin/corrections/:id', requireAdmin, async (req, res) => {
+  try { await db.deleteCorrection(req.params.id); invalidateCache(); res.json({ ok: true }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/api/admin/export', requireAdmin, async (req, res) => {

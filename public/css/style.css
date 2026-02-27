@@ -105,6 +105,25 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .add-input::placeholder{color:var(--text-dark)}
 .btn-add{border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:var(--red)}
 
+/* Editor description */
+.editor-desc{font-size:12px;color:var(--text-gray);margin-bottom:12px}
+
+/* Banned words tags */
+.tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.tag-item{display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--danger);border-radius:16px;padding:4px 10px;font-size:12px}
+.tag-item .tag-del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 2px;opacity:.6}
+.tag-item .tag-del:hover{opacity:1}
+
+/* Corrections list */
+.corrections-list{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.corr-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-light);padding:5px 0}
+.corr-item .corr-wrong{color:var(--orange);font-family:ui-monospace,monospace}
+.corr-item .corr-arrow{color:var(--text-gray)}
+.corr-item .corr-right{color:var(--green);font-family:ui-monospace,monospace;flex:1}
+.corr-item .corr-del{background:none;border:none;color:var(--text-gray);cursor:pointer;font-size:14px;padding:2px 4px}
+.corr-item .corr-del:hover{color:var(--danger)}
+.arrow-sep{color:var(--text-gray);font-size:16px;padding:0 4px}
+
 /* Filter pills */
 .filter-pills{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
 .pill{background:transparent;border:1px solid #222;color:var(--text-dark);border-radius:20px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s}

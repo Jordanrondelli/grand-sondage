@@ -33,7 +33,9 @@
 
       <!-- Actions -->
       <div class="actions-row">
-        <button class="btn-action" id="btn-manage">📝 Gérer questions</button>
+        <button class="btn-action" id="btn-manage">📝 Questions</button>
+        <button class="btn-action" id="btn-banned">🚫 Mots bannis</button>
+        <button class="btn-action" id="btn-corrections">✏️ Corrections</button>
         <button class="btn-action" id="btn-export">📊 Export CSV</button>
       </div>
 
@@ -45,6 +47,30 @@
         <div class="add-row">
           <input class="add-input" id="add-input" placeholder="Nouvelle question...">
           <button class="btn-add" id="btn-add-q">+ Ajouter</button>
+        </div>
+      </div>
+
+      <!-- Banned Words -->
+      <div class="editor hidden" id="banned-section">
+        <h3>🚫 Mots bannis</h3>
+        <p class="editor-desc">Les réponses contenant ces mots/expressions seront rejetées.</p>
+        <div class="tag-list" id="banned-list"></div>
+        <div class="add-row">
+          <input class="add-input" id="banned-input" placeholder="Nouveau mot ou expression...">
+          <button class="btn-add" id="btn-add-banned" style="background:var(--danger)">+ Ajouter</button>
+        </div>
+      </div>
+
+      <!-- Auto Corrections -->
+      <div class="editor hidden" id="corrections-section">
+        <h3>✏️ Corrections automatiques</h3>
+        <p class="editor-desc">Les fautes seront automatiquement corrigées avant enregistrement.</p>
+        <div class="corrections-list" id="corrections-list"></div>
+        <div class="add-row">
+          <input class="add-input" id="correction-wrong" placeholder="Faute (ex: fesbook)" style="flex:1">
+          <span class="arrow-sep">→</span>
+          <input class="add-input" id="correction-right" placeholder="Correction (ex: facebook)" style="flex:1">
+          <button class="btn-add" id="btn-add-correction" style="background:var(--club-cinema)">+ Ajouter</button>
         </div>
       </div>
 
@@ -64,6 +90,6 @@
     </div>
   </div>
 
-  <script src="/js/admin.js?v=3"></script>
+  <script src="/js/admin.js?v=4"></script>
 </body>
 </html>

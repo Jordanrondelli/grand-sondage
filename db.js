@@ -63,22 +63,26 @@ async function init() {
   if (isPostgres) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS categories (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE);
-      CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS answers (id SERIAL PRIMARY KEY, question_id INTEGER NOT NULL REFERENCES questions(id), text TEXT NOT NULL, response_time INTEGER, created_at TIMESTAMP DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
+      CREATE TABLE IF NOT EXISTS banned_words (id SERIAL PRIMARY KEY, word TEXT NOT NULL UNIQUE);
+      CREATE TABLE IF NOT EXISTS corrections (id SERIAL PRIMARY KEY, wrong TEXT NOT NULL UNIQUE, correct TEXT NOT NULL);
     `);
-    // Migrations for existing tables
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS skip_count INTEGER DEFAULT 0").catch(() => {});
+    await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rejected_count INTEGER DEFAULT 0").catch(() => {});
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS response_time INTEGER").catch(() => {});
   } else {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
-      CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER NOT NULL, text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0, FOREIGN KEY (category_id) REFERENCES categories(id));
+      CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER NOT NULL, text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, FOREIGN KEY (category_id) REFERENCES categories(id));
       CREATE TABLE IF NOT EXISTS answers (id INTEGER PRIMARY KEY AUTOINCREMENT, question_id INTEGER NOT NULL, text TEXT NOT NULL, response_time INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (question_id) REFERENCES questions(id));
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
+      CREATE TABLE IF NOT EXISTS banned_words (id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE);
+      CREATE TABLE IF NOT EXISTS corrections (id INTEGER PRIMARY KEY AUTOINCREMENT, wrong TEXT NOT NULL UNIQUE, correct TEXT NOT NULL);
     `);
-    // Migrations for existing tables
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN skip_count INTEGER DEFAULT 0"); } catch {}
+    try { sqlite.exec("ALTER TABLE questions ADD COLUMN rejected_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN response_time INTEGER"); } catch {}
   }
 
@@ -119,6 +123,25 @@ async function init() {
       await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
     }
   }
+
+  // Seed banned words (idempotent)
+  const seedBanned = ['jsp', 'je sais pas', 'aucune idée', "j'étais pas né", 'pas née', 'caca', 'hitler', 'pornhub', "n'importe quoi"];
+  for (const w of seedBanned) {
+    const exists = await get("SELECT id FROM banned_words WHERE word = $1", [w]);
+    if (!exists) await runNoReturn("INSERT INTO banned_words (word) VALUES ($1)", [w]);
+  }
+
+  // Seed corrections (idempotent)
+  const seedCorrections = [
+    ['fesbook', 'facebook'], ['face book', 'facebook'], ['youtybe', 'youtube'],
+    ['youtunes', 'youtube'], ['googel', 'google'], ['formage', 'fromage'],
+    ['chocolay', 'chocolat'], ['saucision', 'saucisson'], ['sky blog', 'skyblog'],
+    ['slyblog', 'skyblog'],
+  ];
+  for (const [w, c] of seedCorrections) {
+    const exists = await get("SELECT id FROM corrections WHERE wrong = $1", [w]);
+    if (!exists) await runNoReturn("INSERT INTO corrections (wrong, correct) VALUES ($1, $2)", [w, c]);
+  }
 }
 
 // --- Queries ---
@@ -157,9 +180,9 @@ async function getAllCategories() {
 
 async function getQuestionsWithCounts() {
   const rows = await all(
-    "SELECT q.id, q.text, q.active, q.category_id, q.skip_count, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count, (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.response_time IS NOT NULL) as avg_time FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
+    "SELECT q.id, q.text, q.active, q.category_id, q.skip_count, q.rejected_count, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count, (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.response_time IS NOT NULL) as avg_time FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
   );
-  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
+  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), rejected_count: Number(r.rejected_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
 
 async function getQuestionById(id) {
@@ -217,6 +240,46 @@ async function getAllAnswersForExport() {
   return rows.map(r => ({ ...r, count: Number(r.count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
 
+async function incrementRejected(qid) {
+  await runNoReturn("UPDATE questions SET rejected_count = COALESCE(rejected_count, 0) + 1 WHERE id = $1", [qid]);
+}
+
+async function getBannedWords() {
+  return all("SELECT * FROM banned_words ORDER BY word");
+}
+
+async function addBannedWord(word) {
+  if (isPostgres) {
+    const res = await pool.query("INSERT INTO banned_words (word) VALUES ($1) ON CONFLICT (word) DO NOTHING RETURNING *", [word]);
+    return res.rows[0] || (await get("SELECT * FROM banned_words WHERE word = $1", [word]));
+  } else {
+    sqlite.prepare("INSERT OR IGNORE INTO banned_words (word) VALUES (?)").run(word);
+    return sqlite.prepare("SELECT * FROM banned_words WHERE word = ?").get(word);
+  }
+}
+
+async function deleteBannedWord(id) {
+  await runNoReturn("DELETE FROM banned_words WHERE id = $1", [id]);
+}
+
+async function getCorrections() {
+  return all("SELECT * FROM corrections ORDER BY wrong");
+}
+
+async function addCorrection(wrong, correct) {
+  if (isPostgres) {
+    const res = await pool.query("INSERT INTO corrections (wrong, correct) VALUES ($1, $2) ON CONFLICT (wrong) DO UPDATE SET correct = EXCLUDED.correct RETURNING *", [wrong, correct]);
+    return res.rows[0];
+  } else {
+    sqlite.prepare("INSERT OR REPLACE INTO corrections (wrong, correct) VALUES (?, ?)").run(wrong, correct);
+    return sqlite.prepare("SELECT * FROM corrections WHERE wrong = ?").get(wrong);
+  }
+}
+
+async function deleteCorrection(id) {
+  await runNoReturn("DELETE FROM corrections WHERE id = $1", [id]);
+}
+
 async function deleteAllAnswers() {
   await runNoReturn("DELETE FROM answers");
 }
@@ -232,9 +295,12 @@ async function insertCategory(name) {
 }
 
 module.exports = {
-  init, getAvailableQuestion, insertAnswer, incrementSkip, getAnswerCount,
+  init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
   getAnswersGrouped, getStats, insertQuestion, updateQuestion,
   deleteQuestion, mergeAnswers, getAllAnswersForExport,
-  deleteAllAnswers, insertCategory, THRESHOLD,
+  deleteAllAnswers, insertCategory,
+  getBannedWords, addBannedWord, deleteBannedWord,
+  getCorrections, addCorrection, deleteCorrection,
+  THRESHOLD,
 };
