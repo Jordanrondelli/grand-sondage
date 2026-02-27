@@ -79,6 +79,19 @@
     } catch { show('done'); }
   }
 
+  // Resume timer from current timeLeft (don't reset)
+  function resumeTimer() {
+    timer = setInterval(() => {
+      timeLeft--;
+      const c = timerColor(timeLeft);
+      $('timer-fill').style.width = ((timeLeft / DURATION) * 100) + '%';
+      $('timer-fill').className = 'timer-fill ' + c;
+      $('timer-num').textContent = timeLeft;
+      $('timer-num').className = 'timer-num ' + c;
+      if (timeLeft <= 0) { stopTimer(); show('timeout'); }
+    }, 1000);
+  }
+
   // Submit
   async function submit() {
     const val = input.value.trim();
@@ -90,11 +103,11 @@
       const resp = await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: val, response_time: rt }) });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        if (err.error === 'Réponse incohérente') {
+        if (err.troll) {
           input.disabled = false;
           input.value = '';
-          input.placeholder = 'Écris une vraie réponse !';
-          startTimer();
+          input.placeholder = 'Donne une vraie réponse 😉';
+          resumeTimer();
           return;
         }
       }
