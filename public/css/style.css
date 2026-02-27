@@ -124,6 +124,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .corr-item .corr-del:hover{color:var(--danger)}
 .arrow-sep{color:var(--text-gray);font-size:16px;padding:0 4px}
 
+/* Auto-merge toggle */
+.setting-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px}
+.toggle-label{font-size:12px;color:var(--text-gray)}
+.toggle-btn{border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;color:#fff;transition:background .2s}
+.toggle-btn.on{background:var(--green)}
+.toggle-btn.off{background:#444}
+
 /* Filter pills */
 .filter-pills{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
 .pill{background:transparent;border:1px solid #222;color:var(--text-dark);border-radius:20px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s}
