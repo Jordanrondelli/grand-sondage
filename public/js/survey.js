@@ -42,6 +42,7 @@
   }
 
   function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+  function getResponseTime() { return DURATION - timeLeft; }
 
   // Input handling
   const input = $('answer-input');
@@ -67,6 +68,7 @@
       $('q-text').textContent = data.text;
       input.value = '';
       input.disabled = false;
+      input.placeholder = 'Ta réponse...';
       btnVal.classList.add('dim');
       const fc = $('fire-count');
       if (answeredIds.size > 0) { fc.textContent = answeredIds.size + ' réponses 🔥'; fc.style.display = ''; }
@@ -81,10 +83,11 @@
   async function submit() {
     const val = input.value.trim();
     if (!val || !currentQ) return;
+    const rt = getResponseTime();
     stopTimer();
     input.disabled = true;
     try {
-      const resp = await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: val }) });
+      const resp = await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: val, response_time: rt }) });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         if (err.error === 'Réponse incohérente') {
@@ -105,7 +108,12 @@
   // Skip
   function skip() {
     stopTimer();
-    if (currentQ) { answeredIds.add(currentQ.id); localStorage.setItem('answered', JSON.stringify([...answeredIds])); updateAlready(); }
+    if (currentQ) {
+      fetch('/api/questions/' + currentQ.id + '/skip', { method: 'POST' }).catch(() => {});
+      answeredIds.add(currentQ.id);
+      localStorage.setItem('answered', JSON.stringify([...answeredIds]));
+      updateAlready();
+    }
     loadNext();
   }
 

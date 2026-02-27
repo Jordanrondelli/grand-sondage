@@ -81,11 +81,14 @@
       const card = document.createElement('div');
       card.className = 'q-card' + (expandedId === q.id ? ' open' : '');
       const countColor = q.answer_count >= 100 ? '#22C55E' : q.answer_count > 50 ? '#F59E0B' : '#888';
+      const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
+      const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
       card.innerHTML =
         '<div class="q-card-header" data-qid="' + q.id + '">' +
           '<div class="q-card-left">' +
             '<div class="club-label"><span class="club-dot" style="background:' + club.color + '"></span>' + esc(q.category_name) + '</div>' +
             '<div class="q-card-text">' + esc(q.text) + '</div>' +
+            '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + '</div>' +
           '</div>' +
           '<div class="q-card-count" style="color:' + countColor + '">' + q.answer_count + '<span style="color:#555;font-size:13px">/100</span></div>' +
         '</div>' +

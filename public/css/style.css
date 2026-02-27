@@ -119,6 +119,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .club-label{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-gray);text-transform:uppercase;letter-spacing:1px}
 .club-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .q-card-text{font-size:13px;color:var(--text-light);line-height:1.4;overflow:hidden;text-overflow:ellipsis}
+.q-card-meta{font-size:11px;color:var(--text-gray);margin-top:3px;font-family:ui-monospace,monospace}
 .q-card-count{font-size:18px;font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap;margin-left:12px}
 
 /* Card detail panel */

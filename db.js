@@ -54,17 +54,23 @@ async function init() {
   if (isPostgres) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS categories (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE);
-      CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, active INTEGER DEFAULT 1);
-      CREATE TABLE IF NOT EXISTS answers (id SERIAL PRIMARY KEY, question_id INTEGER NOT NULL REFERENCES questions(id), text TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS answers (id SERIAL PRIMARY KEY, question_id INTEGER NOT NULL REFERENCES questions(id), text TEXT NOT NULL, response_time INTEGER, created_at TIMESTAMP DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
     `);
+    // Migrations for existing tables
+    await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS skip_count INTEGER DEFAULT 0").catch(() => {});
+    await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS response_time INTEGER").catch(() => {});
   } else {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
-      CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER NOT NULL, text TEXT NOT NULL, active INTEGER DEFAULT 1, FOREIGN KEY (category_id) REFERENCES categories(id));
-      CREATE TABLE IF NOT EXISTS answers (id INTEGER PRIMARY KEY AUTOINCREMENT, question_id INTEGER NOT NULL, text TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (question_id) REFERENCES questions(id));
+      CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER NOT NULL, text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0, FOREIGN KEY (category_id) REFERENCES categories(id));
+      CREATE TABLE IF NOT EXISTS answers (id INTEGER PRIMARY KEY AUTOINCREMENT, question_id INTEGER NOT NULL, text TEXT NOT NULL, response_time INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (question_id) REFERENCES questions(id));
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
     `);
+    // Migrations for existing tables
+    try { sqlite.exec("ALTER TABLE questions ADD COLUMN skip_count INTEGER DEFAULT 0"); } catch {}
+    try { sqlite.exec("ALTER TABLE answers ADD COLUMN response_time INTEGER"); } catch {}
   }
 
   const row = await get('SELECT COUNT(*) as c FROM categories');
@@ -124,8 +130,12 @@ async function getAvailableQuestion(excludeIds) {
   }
 }
 
-async function insertAnswer(qid, text) {
-  await runNoReturn("INSERT INTO answers (question_id, text) VALUES ($1, $2)", [qid, text]);
+async function insertAnswer(qid, text, responseTime) {
+  await runNoReturn("INSERT INTO answers (question_id, text, response_time) VALUES ($1, $2, $3)", [qid, text, responseTime || null]);
+}
+
+async function incrementSkip(qid) {
+  await runNoReturn("UPDATE questions SET skip_count = COALESCE(skip_count, 0) + 1 WHERE id = $1", [qid]);
 }
 
 async function getAnswerCount(qid) {
@@ -138,9 +148,9 @@ async function getAllCategories() {
 
 async function getQuestionsWithCounts() {
   const rows = await all(
-    "SELECT q.id, q.text, q.active, q.category_id, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
+    "SELECT q.id, q.text, q.active, q.category_id, q.skip_count, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count, (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.response_time IS NOT NULL) as avg_time FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
   );
-  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count) }));
+  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
 
 async function getQuestionById(id) {
@@ -213,7 +223,7 @@ async function insertCategory(name) {
 }
 
 module.exports = {
-  init, getAvailableQuestion, insertAnswer, getAnswerCount,
+  init, getAvailableQuestion, insertAnswer, incrementSkip, getAnswerCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
   getAnswersGrouped, getStats, insertQuestion, updateQuestion,
   deleteQuestion, mergeAnswers, getAllAnswersForExport,
