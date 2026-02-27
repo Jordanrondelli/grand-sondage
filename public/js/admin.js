@@ -31,14 +31,16 @@
 
   // Load
   async function loadAll() {
-    const [sr, qr, cr] = await Promise.all([api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories')]);
-    const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
-    renderStats(stats);
-    renderFilters();
-    renderCards();
-    if (!editorClub && categories.length) editorClub = categories[0].name;
-    renderEditorTabs();
-    renderEditor();
+    try {
+      const [sr, qr, cr] = await Promise.all([api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories')]);
+      const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
+      renderStats(stats);
+      renderFilters();
+      renderCards();
+      if (!editorClub && categories.length) editorClub = categories[0].name;
+      renderEditorTabs();
+      renderEditor();
+    } catch (e) { if (e.message !== 'unauth') console.error('loadAll error:', e); }
   }
 
   // Stats
@@ -179,7 +181,7 @@
   // Editor
   $('btn-manage').onclick = () => {
     const ed = $('editor');
-    ed.style.display = ed.style.display === 'none' ? '' : 'none';
+    ed.classList.toggle('hidden');
   };
 
   function renderEditorTabs() {
@@ -233,15 +235,15 @@
 
   async function addQuestion() {
     const val = $('add-input').value.trim();
-    if (!val) return;
+    if (!val) { alert('Écris une question d\'abord'); return; }
     const catObj = categories.find(c => c.name === editorClub);
-    if (!catObj) return;
+    if (!catObj) { alert('Erreur : aucun club sélectionné. Clique sur un onglet de club.'); return; }
     try {
       const r = await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ category_id: catObj.id, text: val }) });
-      if (!r.ok) { alert('Erreur lors de l\'ajout'); return; }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); alert('Erreur : ' + (d.error || r.status)); return; }
       $('add-input').value = '';
       await loadAll();
-    } catch (e) { if (e.message !== 'unauth') alert('Erreur réseau'); }
+    } catch (e) { if (e.message !== 'unauth') alert('Erreur réseau : ' + e.message); }
   }
   $('btn-add-q').onclick = addQuestion;
   $('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addQuestion(); });
