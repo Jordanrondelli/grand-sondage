@@ -42,6 +42,8 @@ function isGibberish(text) {
   if (/^(.{1,3})\1{2,}/i.test(stripped)) return true;
   // Same vowel 3+ times in a row: "ooooj", "aaaa"
   if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(stripped)) return true;
+  // Long string with very few unique chars — keyboard spam: "ohoijhjhoijoi"
+  if (stripped.length > 8 && new Set(stripped.toLowerCase()).size <= stripped.length / 3) return true;
   return false;
 }
 
