@@ -8,9 +8,10 @@ services:
   - type: web
     name: grand-sondage
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm install
     startCommand: node server.js
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
