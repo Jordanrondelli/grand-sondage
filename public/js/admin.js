@@ -122,26 +122,39 @@
     const det = $('detail-' + id);
     if (!det) return;
     const selectedSet = new Set();
+    const ind = data.indicators || {};
 
-    // Top 5
-    let t5color = '#888', t5label = '';
-    if (data.top5Status === 'good') { t5color = '#22C55E'; t5label = '✅ Bon profil'; }
-    else if (data.top5Status === 'concentrated') { t5color = '#EF4444'; t5label = '⚠️ Trop concentré'; }
-    else if (data.top5Status === 'scattered') { t5color = '#F59E0B'; t5label = '⚠️ Trop éclaté'; }
+    // --- 3 indicators + verdict ---
+    const trapIcon = ind.trapClear ? '✅' : '⚠️';
+    const trapText = ind.trapClear ? 'Piège clair (' + ind.top1Pct.toFixed(1) + '%)' : 'Pas de piège évident (' + (ind.top1Pct || 0).toFixed(1) + '%)';
 
-    let html = '<div class="top5-bar">' +
-      '<div class="top5-text" style="color:' + t5color + '">Top 5 = ' + data.top5Pct.toFixed(1) + '%</div>' +
-      '<div class="top5-track"><div class="top5-fill" style="width:' + Math.min(data.top5Pct, 100) + '%;background:' + t5color + '"></div></div>' +
-      '<div class="top5-verdict" style="color:' + t5color + '">' + t5label + '</div></div>';
+    const stepsIcon = ind.stepsOk === 'good' ? '✅' : ind.stepsOk === 'mid' ? '⚠️' : '❌';
+    const stepsText = ind.stepsOk === 'good' ? 'Descente progressive (' + ind.above2pct + ' paliers)'
+      : ind.stepsOk === 'mid' ? 'Peu de paliers (' + ind.above2pct + ')'
+      : 'Trou entre le piège et le vide (' + (ind.above2pct || 0) + ')';
+
+    const riskIcon = ind.riskOk ? '✅' : '⚠️';
+    const riskText = ind.riskOk ? 'Risque hors panel (top 5 = ' + data.top5Pct.toFixed(1) + '%)' : 'Presque impossible de se planter (top 5 = ' + data.top5Pct.toFixed(1) + '%)';
+
+    let verdictClass, verdictText;
+    if (ind.verdict === 'perfect') { verdictClass = 'verdict-green'; verdictText = '✅ Question parfaite'; }
+    else if (ind.verdict === 'ok') { verdictClass = 'verdict-orange'; verdictText = '⚠️ Jouable mais pas idéale'; }
+    else { verdictClass = 'verdict-red'; verdictText = '❌ Question à remplacer'; }
+
+    let html = '<div class="indicators">' +
+      '<div class="ind-row"><span class="ind-icon">' + trapIcon + '</span><span class="ind-text">' + trapText + '</span></div>' +
+      '<div class="ind-row"><span class="ind-icon">' + stepsIcon + '</span><span class="ind-text">' + stepsText + '</span></div>' +
+      '<div class="ind-row"><span class="ind-icon">' + riskIcon + '</span><span class="ind-text">' + riskText + '</span></div>' +
+      '<div class="verdict ' + verdictClass + '">' + verdictText + '</div></div>';
 
     html += '<div class="answer-list" id="alist-' + id + '">';
     data.answers.forEach((a, i) => {
-      const isTop = i < 5;
-      html += '<div class="answer-row-item' + (isTop ? ' top5' : '') + '" data-norm="' + esc(a.normalized) + '">' +
+      const barClass = a.percentage >= 10 ? 'bar-trap' : a.percentage >= 3 ? 'bar-smart' : 'bar-risky';
+      html += '<div class="answer-row-item" data-norm="' + esc(a.normalized) + '">' +
         '<div class="answer-cb" data-norm="' + esc(a.normalized) + '"></div>' +
         '<span class="answer-rank">' + (i + 1) + '</span>' +
         '<span class="answer-name">' + esc(a.sample_text) + '</span>' +
-        '<div class="answer-minibar"><div class="answer-minibar-fill ' + (isTop ? 'top' : 'rest') + '" style="width:' + Math.min(a.percentage, 100) + '%"></div></div>' +
+        '<div class="answer-minibar"><div class="answer-minibar-fill ' + barClass + '" style="width:' + Math.min(a.percentage, 100) + '%"></div></div>' +
         '<span class="answer-stat">' + a.count + ' (' + a.percentage.toFixed(1) + '%)</span></div>';
     });
     html += '</div>';
