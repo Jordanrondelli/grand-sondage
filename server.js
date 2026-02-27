@@ -11,14 +11,17 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'clubsecret2026';
 
 // --- Normalization & Validation ---
 
-// Cache for banned words and corrections (refreshed every 60s)
+// Cache for banned words, corrections, settings (refreshed every 60s)
 let bannedWordsCache = [];
 let correctionsCache = [];
+let autoMergeEnabled = true;
 let cacheTime = 0;
 async function refreshCache() {
   if (Date.now() - cacheTime < 60000) return;
   bannedWordsCache = await db.getBannedWords();
   correctionsCache = await db.getCorrections();
+  const am = await db.getSetting('auto_merge');
+  autoMergeEnabled = am !== '0';
   cacheTime = Date.now();
 }
 function invalidateCache() { cacheTime = 0; }
@@ -81,7 +84,7 @@ function isGibberish(text) {
   return false;
 }
 
-// --- Fuzzy Answer Grouping (for CSV export) ---
+// --- Fuzzy Answer Matching ---
 
 function deepNormalize(text) {
   return text
@@ -120,6 +123,22 @@ function areSimilar(a, b) {
   return dist <= threshold;
 }
 
+// Find matching existing answer (>80% similarity) — returns existing text or null
+function findMatchingAnswer(newText, existingAnswers) {
+  const newNorm = deepNormalize(newText);
+  for (const { text } of existingAnswers) {
+    const existNorm = deepNormalize(text);
+    if (newNorm === existNorm) return text;
+    if (newNorm.startsWith(existNorm) || existNorm.startsWith(newNorm)) return text;
+    const maxLen = Math.max(newNorm.length, existNorm.length);
+    if (maxLen === 0) continue;
+    const dist = levenshtein(newNorm, existNorm);
+    if (dist / maxLen <= 0.2) return text; // 80% similar
+  }
+  return null;
+}
+
+// Cluster answers for CSV export (more permissive — 70% similarity)
 function clusterAnswers(answers) {
   const clusters = [];
   for (const item of answers) {
@@ -210,6 +229,13 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     const count = await db.getAnswerCount(question_id);
     if (count >= db.THRESHOLD)
       return res.status(410).json({ error: 'Complet' });
+
+    // Fuzzy match against existing answers (if enabled)
+    if (autoMergeEnabled) {
+      const existing = await db.getExistingAnswers(question_id);
+      const match = findMatchingAnswer(normalized, existing);
+      if (match) normalized = match;
+    }
 
     await db.insertAnswer(question_id, normalized, rt);
     res.json({ ok: true });
@@ -351,6 +377,24 @@ app.post('/api/admin/corrections', requireAdmin, async (req, res) => {
 app.delete('/api/admin/corrections/:id', requireAdmin, async (req, res) => {
   try { await db.deleteCorrection(req.params.id); invalidateCache(); res.json({ ok: true }); }
   catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// --- Settings ---
+
+app.get('/api/admin/settings/auto-merge', requireAdmin, async (req, res) => {
+  try {
+    const val = await db.getSetting('auto_merge');
+    res.json({ enabled: val !== '0' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/settings/auto-merge', requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await db.setSetting('auto_merge', enabled ? '1' : '0');
+    invalidateCache();
+    res.json({ ok: true, enabled: !!enabled });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
