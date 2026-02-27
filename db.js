@@ -212,9 +212,9 @@ async function mergeAnswers(qid, texts, canonical) {
 
 async function getAllAnswersForExport() {
   const rows = await all(
-    "SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text)) ORDER BY q.id, count DESC"
+    "SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count, q.skip_count, (SELECT ROUND(AVG(a2.response_time)) FROM answers a2 WHERE a2.question_id = q.id AND a2.response_time IS NOT NULL) as avg_time FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text)), q.skip_count ORDER BY q.id, count DESC"
   );
-  return rows.map(r => ({ ...r, count: Number(r.count) }));
+  return rows.map(r => ({ ...r, count: Number(r.count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
 
 async function deleteAllAnswers() {

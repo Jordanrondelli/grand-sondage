@@ -47,6 +47,67 @@ function isGibberish(text) {
   return false;
 }
 
+// --- Fuzzy Answer Grouping (for CSV export) ---
+
+function deepNormalize(text) {
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .replace(/(.)\1+/g, '$1');
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let j = 1; j <= n; j++) {
+    let prev = dp[0];
+    dp[0] = j;
+    for (let i = 1; i <= m; i++) {
+      const temp = dp[i];
+      dp[i] = Math.min(dp[i] + 1, dp[i - 1] + 1, prev + (a[i - 1] !== b[j - 1] ? 1 : 0));
+      prev = temp;
+    }
+  }
+  return dp[m];
+}
+
+function areSimilar(a, b) {
+  const na = deepNormalize(a);
+  const nb = deepNormalize(b);
+  if (na === nb) return true;
+  if (na.startsWith(nb) || nb.startsWith(na)) return true;
+  const maxLen = Math.max(na.length, nb.length);
+  if (maxLen === 0) return true;
+  const dist = levenshtein(na, nb);
+  const threshold = maxLen <= 5 ? 1 : Math.floor(maxLen * 0.3);
+  return dist <= threshold;
+}
+
+function clusterAnswers(answers) {
+  const clusters = [];
+  for (const item of answers) {
+    let merged = false;
+    for (const cluster of clusters) {
+      if (areSimilar(item.answer, cluster.canonical)) {
+        cluster.count += item.count;
+        if (item.count > cluster.maxCount) {
+          cluster.canonical = item.answer;
+          cluster.maxCount = item.count;
+        }
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) {
+      clusters.push({ canonical: item.answer, count: item.count, maxCount: item.count });
+    }
+  }
+  return clusters.sort((a, b) => b.count - a.count).map(c => ({ answer: c.canonical, count: c.count }));
+}
+
 // --- Rate limiter ---
 
 const rateLimitMap = new Map();
@@ -211,15 +272,31 @@ app.post('/api/admin/merge', requireAdmin, async (req, res) => {
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
   try {
     const rows = await db.getAllAnswersForExport();
-    const totals = {};
-    rows.forEach(r => { totals[r.question_id] = (totals[r.question_id] || 0) + r.count; });
-    let csv = '\uFEFFquestion_id,club,question,réponse,count,pourcentage\n';
+    // Group by question
+    const byQuestion = {};
     rows.forEach(r => {
-      const t = totals[r.question_id];
-      const p = t > 0 ? ((r.count / t) * 100).toFixed(1) : '0.0';
-      const e = s => '"' + String(s).replace(/"/g, '""') + '"';
-      csv += `${r.question_id},${e(r.club)},${e(r.question)},${e(r.answer)},${r.count},${p}%\n`;
+      if (!byQuestion[r.question_id]) {
+        byQuestion[r.question_id] = {
+          question_id: r.question_id, club: r.club, question: r.question,
+          skip_count: r.skip_count, avg_time: r.avg_time, answers: []
+        };
+      }
+      byQuestion[r.question_id].answers.push({ answer: r.answer, count: r.count });
     });
+
+    const e = s => '"' + String(s).replace(/"/g, '""') + '"';
+    let csv = '\uFEFFquestion_id,club,question,réponse,count,pourcentage,skips,temps_moyen_sec\n';
+
+    for (const qid of Object.keys(byQuestion).sort((a, b) => a - b)) {
+      const q = byQuestion[qid];
+      const clustered = clusterAnswers(q.answers);
+      const total = clustered.reduce((s, a) => s + a.count, 0);
+      for (const a of clustered) {
+        const p = total > 0 ? ((a.count / total) * 100).toFixed(1) : '0.0';
+        csv += `${q.question_id},${e(q.club)},${e(q.question)},${e(a.answer)},${a.count},${p}%,${q.skip_count},${q.avg_time || ''}\n`;
+      }
+    }
+
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="clubs_secrets_resultats.csv"');
     res.send(csv);
