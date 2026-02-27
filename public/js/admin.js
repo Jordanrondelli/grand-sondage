@@ -1,309 +1,258 @@
 (function () {
-  const views = {
-    login: document.getElementById('view-login'),
-    dashboard: document.getElementById('view-dashboard'),
-    detail: document.getElementById('view-detail'),
+  const CLUBS = {
+    'années 2000': { emoji: '📼', color: '#E94560' },
+    'nourriture':  { emoji: '🍔', color: '#F5A623' },
+    'cinéma':      { emoji: '🎬', color: '#7B68EE' },
   };
 
-  let categories = [];
-  let currentDetailId = null;
+  const $ = id => document.getElementById(id);
+  let categories = [], questions = [], activeFilter = null, editorClub = null, expandedId = null;
 
-  function showView(name) {
-    Object.values(views).forEach(v => v.classList.remove('active'));
-    views[name].classList.add('active');
-  }
-
-  async function api(url, opts = {}) {
-    const res = await fetch(url, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', ...opts.headers },
-    });
-    if (res.status === 401) {
-      showView('login');
-      throw new Error('Non autorisé');
-    }
+  function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  async function api(url, opts) {
+    const res = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...opts?.headers } });
+    if (res.status === 401) { show('screen-login'); throw new Error('unauth'); }
     return res;
   }
 
-  // --------------- Auth ---------------
-
+  // Auth
   async function checkAuth() {
-    const res = await fetch('/api/admin/check');
-    const data = await res.json();
-    if (data.authenticated) {
-      showView('dashboard');
-      loadDashboard();
-    } else {
-      showView('login');
-    }
+    const r = await fetch('/api/admin/check'); const d = await r.json();
+    if (d.authenticated) { show('screen-dashboard'); loadAll(); } else show('screen-login');
+  }
+  $('btn-login').onclick = async () => {
+    const pw = $('login-pw').value;
+    const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+    if (r.ok) { show('screen-dashboard'); loadAll(); }
+    else { $('login-err').textContent = 'Incorrect'; setTimeout(() => $('login-err').textContent = '', 1500); }
+  };
+  $('login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
+
+  // Load
+  async function loadAll() {
+    const [sr, qr, cr] = await Promise.all([api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories')]);
+    const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
+    renderStats(stats);
+    renderFilters();
+    renderCards();
+    if (!editorClub && categories.length) editorClub = categories[0].name;
+    renderEditorTabs();
+    renderEditor();
   }
 
-  document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const pw = document.getElementById('login-password').value;
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
-    });
-    if (res.ok) {
-      showView('dashboard');
-      loadDashboard();
-    } else {
-      const err = document.getElementById('login-error');
-      err.textContent = 'Mot de passe incorrect';
-      err.style.display = 'block';
-    }
-  });
+  // Stats
+  function renderStats(s) {
+    $('s-total').textContent = s.totalAnswers;
+    $('s-complete').textContent = s.completeQuestions + '/' + s.totalQuestions;
+    const pct = s.totalQuestions > 0 ? Math.round((s.completeQuestions / s.totalQuestions) * 100) : 0;
+    $('s-pct').textContent = pct + '%';
+    $('s-pct').style.color = pct >= 100 ? '#22C55E' : '#F59E0B';
+  }
 
-  document.getElementById('btn-logout').addEventListener('click', async () => {
-    await api('/api/admin/logout', { method: 'POST' });
-    showView('login');
-  });
-
-  // --------------- Dashboard ---------------
-
-  async function loadDashboard() {
-    const [statsRes, questionsRes, catsRes] = await Promise.all([
-      api('/api/admin/stats'),
-      api('/api/admin/questions'),
-      api('/api/admin/categories'),
-    ]);
-
-    const stats = await statsRes.json();
-    const questions = await questionsRes.json();
-    categories = await catsRes.json();
-
-    // Stats
-    document.getElementById('stat-total').textContent = stats.totalAnswers;
-    document.getElementById('stat-complete').textContent = stats.completeQuestions + '/' + stats.totalQuestions;
-    const pct = stats.totalQuestions > 0
-      ? Math.round((questions.reduce((s, q) => s + Math.min(q.answer_count, stats.threshold), 0) / (stats.totalQuestions * stats.threshold)) * 100)
-      : 0;
-    document.getElementById('stat-progress').textContent = pct + '%';
-    document.getElementById('progress-bar').style.width = pct + '%';
-
-    // Populate category select
-    const catSelect = document.getElementById('form-category');
-    catSelect.innerHTML = '<option value="">-- Catégorie --</option>';
-    categories.forEach(c => {
-      catSelect.innerHTML += `<option value="${c.id}">${esc(c.name)}</option>`;
-    });
-
-    // Questions grouped by category
-    const grouped = {};
-    questions.forEach(q => {
-      if (!grouped[q.category_name]) grouped[q.category_name] = [];
-      grouped[q.category_name].push(q);
-    });
-
-    const container = document.getElementById('questions-list');
-    container.innerHTML = '';
-
-    for (const [catName, qs] of Object.entries(grouped)) {
-      const section = document.createElement('div');
-      section.className = 'category-section';
-      section.innerHTML = `<h3 class="category-title">${esc(catName)}</h3>`;
-      const list = document.createElement('div');
-      list.className = 'question-list';
-
-      qs.forEach(q => {
-        const pctQ = Math.min(100, Math.round((q.answer_count / stats.threshold) * 100));
-        const isDone = q.answer_count >= stats.threshold;
-        const item = document.createElement('div');
-        item.className = 'question-item' + (isDone ? ' question-complete' : '');
-        item.innerHTML = `
-          <div class="question-item-text" data-id="${q.id}">${esc(q.text)}</div>
-          <div class="question-item-meta">
-            <span class="answer-badge ${isDone ? 'badge-complete' : ''}">${q.answer_count}/${stats.threshold}</span>
-            <div class="mini-progress"><div class="mini-bar" style="width:${pctQ}%"></div></div>
-            <button class="btn btn-ghost btn-xs" data-edit="${q.id}">✏️</button>
-            <button class="btn btn-ghost btn-xs" data-delete="${q.id}">🗑️</button>
-          </div>
-        `;
-        list.appendChild(item);
-      });
-
-      section.appendChild(list);
-      container.appendChild(section);
-    }
-
-    // Click handlers
-    container.querySelectorAll('[data-id]').forEach(el => {
-      el.addEventListener('click', () => loadDetail(el.dataset.id));
-    });
-    container.querySelectorAll('[data-edit]').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const q = questions.find(x => x.id == el.dataset.edit);
-        openEditForm(q);
-      });
-    });
-    container.querySelectorAll('[data-delete]').forEach(el => {
-      el.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!confirm('Supprimer cette question et toutes ses réponses ?')) return;
-        await api('/api/admin/questions/' + el.dataset.delete, { method: 'DELETE' });
-        loadDashboard();
-      });
+  // Filters
+  function renderFilters() {
+    const c = $('filter-pills'); c.innerHTML = '';
+    const all = document.createElement('button');
+    all.className = 'pill' + (!activeFilter ? ' active' : '');
+    all.textContent = 'Toutes';
+    if (!activeFilter) all.style.cssText = 'background:#333;border-color:#333;color:#fff';
+    all.onclick = () => { activeFilter = null; renderFilters(); renderCards(); };
+    c.appendChild(all);
+    categories.forEach(cat => {
+      const b = document.createElement('button');
+      const club = CLUBS[cat.name] || { emoji: '', color: '#888' };
+      b.className = 'pill' + (activeFilter === cat.name ? ' active' : '');
+      b.textContent = club.emoji + ' ' + cat.name;
+      if (activeFilter === cat.name) b.style.cssText = 'background:' + club.color + ';border-color:' + club.color + ';color:#fff';
+      b.onclick = () => { activeFilter = cat.name; renderFilters(); renderCards(); };
+      c.appendChild(b);
     });
   }
 
-  // --------------- Add/Edit Questions ---------------
-
-  document.getElementById('btn-add-question').addEventListener('click', () => {
-    document.getElementById('form-question-id').value = '';
-    document.getElementById('form-text').value = '';
-    document.getElementById('form-category').value = '';
-    document.getElementById('form-title').textContent = 'Ajouter une question';
-    document.getElementById('question-form-wrapper').style.display = 'block';
-  });
-
-  document.getElementById('form-cancel').addEventListener('click', () => {
-    document.getElementById('question-form-wrapper').style.display = 'none';
-  });
-
-  function openEditForm(q) {
-    document.getElementById('form-question-id').value = q.id;
-    document.getElementById('form-text').value = q.text;
-    document.getElementById('form-category').value = q.category_id;
-    document.getElementById('form-title').textContent = 'Modifier la question';
-    document.getElementById('question-form-wrapper').style.display = 'block';
+  // Cards
+  function renderCards() {
+    const c = $('q-cards'); c.innerHTML = '';
+    const filtered = activeFilter ? questions.filter(q => q.category_name === activeFilter) : questions;
+    filtered.forEach(q => {
+      const club = CLUBS[q.category_name] || { emoji: '', color: '#888' };
+      const card = document.createElement('div');
+      card.className = 'q-card' + (expandedId === q.id ? ' open' : '');
+      const countColor = q.answer_count >= 100 ? '#22C55E' : q.answer_count > 50 ? '#F59E0B' : '#888';
+      card.innerHTML =
+        '<div class="q-card-header" data-qid="' + q.id + '">' +
+          '<div class="q-card-left">' +
+            '<div class="club-label"><span class="club-dot" style="background:' + club.color + '"></span>' + esc(q.category_name) + '</div>' +
+            '<div class="q-card-text">' + esc(q.text) + '</div>' +
+          '</div>' +
+          '<div class="q-card-count" style="color:' + countColor + '">' + q.answer_count + '<span style="color:#555;font-size:13px">/100</span></div>' +
+        '</div>' +
+        '<div class="q-card-detail" id="detail-' + q.id + '"></div>';
+      card.querySelector('.q-card-header').onclick = () => toggleCard(q.id);
+      c.appendChild(card);
+    });
+    if (expandedId) loadDetail(expandedId);
   }
 
-  document.getElementById('question-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('form-question-id').value;
-    const text = document.getElementById('form-text').value.trim();
-    const category_id = document.getElementById('form-category').value;
-    if (!text || !category_id) return alert('Remplis tous les champs');
-
-    if (id) {
-      await api('/api/admin/questions/' + id, {
-        method: 'PUT',
-        body: JSON.stringify({ text, category_id: Number(category_id) }),
-      });
-    } else {
-      await api('/api/admin/questions', {
-        method: 'POST',
-        body: JSON.stringify({ text, category_id: Number(category_id) }),
-      });
-    }
-
-    document.getElementById('question-form-wrapper').style.display = 'none';
-    loadDashboard();
-  });
-
-  // --------------- Detail View ---------------
+  async function toggleCard(id) {
+    if (expandedId === id) { expandedId = null; renderCards(); return; }
+    expandedId = id;
+    renderCards();
+    await loadDetail(id);
+  }
 
   async function loadDetail(id) {
-    currentDetailId = id;
-    const res = await api('/api/admin/questions/' + id + '/answers');
-    const data = await res.json();
-
-    document.getElementById('detail-question-text').textContent = data.question.text;
-    document.getElementById('detail-count').textContent = data.totalCount + '/' + 100 + ' réponses';
-    document.getElementById('detail-category').textContent = data.question.category_name;
+    const r = await api('/api/admin/questions/' + id + '/answers');
+    const data = await r.json();
+    const det = $('detail-' + id);
+    if (!det) return;
+    const selectedSet = new Set();
 
     // Top 5
-    const t5 = document.getElementById('top5-indicator');
-    let t5Class = 'top5-neutral';
-    let t5Label = 'En attente (pas assez de données)';
-    if (data.top5Status === 'good') {
-      t5Class = 'top5-good';
-      t5Label = `Top 5 = ${data.top5Pct}% — Bonne répartition`;
-    } else if (data.top5Status === 'concentrated') {
-      t5Class = 'top5-concentrated';
-      t5Label = `Top 5 = ${data.top5Pct}% — Trop concentré`;
-    } else if (data.top5Status === 'scattered') {
-      t5Class = 'top5-scattered';
-      t5Label = `Top 5 = ${data.top5Pct}% — Trop éclaté`;
-    }
-    t5.className = 'top5-indicator ' + t5Class;
-    t5.textContent = t5Label;
+    let t5color = '#888', t5label = '';
+    if (data.top5Status === 'good') { t5color = '#22C55E'; t5label = '✅ Bon profil'; }
+    else if (data.top5Status === 'concentrated') { t5color = '#EF4444'; t5label = '⚠️ Trop concentré'; }
+    else if (data.top5Status === 'scattered') { t5color = '#F59E0B'; t5label = '⚠️ Trop éclaté'; }
 
-    // Answers table
-    const tbody = document.getElementById('answers-tbody');
-    tbody.innerHTML = '';
+    let html = '<div class="top5-bar">' +
+      '<div class="top5-text" style="color:' + t5color + '">Top 5 = ' + data.top5Pct.toFixed(1) + '%</div>' +
+      '<div class="top5-track"><div class="top5-fill" style="width:' + Math.min(data.top5Pct, 100) + '%;background:' + t5color + '"></div></div>' +
+      '<div class="top5-verdict" style="color:' + t5color + '">' + t5label + '</div></div>';
+
+    html += '<div class="answer-list" id="alist-' + id + '">';
     data.answers.forEach((a, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="checkbox" class="answer-check" data-text="${esc(a.normalized)}"></td>
-        <td>${i + 1}</td>
-        <td>${esc(a.sample_text)}</td>
-        <td>${a.count}</td>
-        <td><div class="pct-bar-cell"><div class="pct-bar-fill" style="width:${a.percentage}%"></div><span>${a.percentage}%</span></div></td>
-      `;
-      tbody.appendChild(tr);
+      const isTop = i < 5;
+      html += '<div class="answer-row-item' + (isTop ? ' top5' : '') + '" data-norm="' + esc(a.normalized) + '">' +
+        '<div class="answer-cb" data-norm="' + esc(a.normalized) + '"></div>' +
+        '<span class="answer-rank">' + (i + 1) + '</span>' +
+        '<span class="answer-name">' + esc(a.sample_text) + '</span>' +
+        '<div class="answer-minibar"><div class="answer-minibar-fill ' + (isTop ? 'top' : 'rest') + '" style="width:' + Math.min(a.percentage, 100) + '%"></div></div>' +
+        '<span class="answer-stat">' + a.count + ' (' + a.percentage.toFixed(1) + '%)</span></div>';
+    });
+    html += '</div>';
+    html += '<div class="merge-bar" id="merge-bar-' + id + '"><div class="merge-label" id="merge-label-' + id + '"></div><div class="merge-row"><input class="merge-input" id="merge-input-' + id + '"><button class="btn-merge" id="merge-go-' + id + '">Fusionner</button><button class="btn-merge-cancel" id="merge-cancel-' + id + '">Annuler</button></div></div>';
+    html += '<div class="answer-footer">' + data.answers.length + ' réponses uniques — cliquer pour sélectionner et fusionner</div>';
+    det.innerHTML = html;
+
+    // Click handlers
+    det.querySelectorAll('.answer-row-item').forEach(row => {
+      row.onclick = () => {
+        const norm = row.dataset.norm;
+        const cb = row.querySelector('.answer-cb');
+        if (selectedSet.has(norm)) { selectedSet.delete(norm); cb.classList.remove('checked'); cb.textContent = ''; }
+        else { selectedSet.add(norm); cb.classList.add('checked'); cb.textContent = '✓'; }
+        updateMerge();
+      };
     });
 
-    document.getElementById('merge-tool').style.display = 'none';
-    showView('detail');
-    updateMergeVisibility();
+    function updateMerge() {
+      const bar = $('merge-bar-' + id);
+      if (selectedSet.size >= 2) {
+        bar.classList.add('visible');
+        $('merge-label-' + id).textContent = 'Fusionner ' + selectedSet.size + ' réponses en :';
+        const inp = $('merge-input-' + id);
+        if (!inp.value) inp.value = [...selectedSet][0];
+      } else {
+        bar.classList.remove('visible');
+      }
+    }
+
+    $('merge-go-' + id).onclick = async () => {
+      const canonical = $('merge-input-' + id).value.trim();
+      if (!canonical) return;
+      await api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [...selectedSet], canonical_text: canonical }) });
+      selectedSet.clear();
+      $('merge-input-' + id).value = '';
+      await loadAll();
+      expandedId = id;
+      renderCards();
+      loadDetail(id);
+    };
+    $('merge-cancel-' + id).onclick = () => {
+      selectedSet.clear();
+      det.querySelectorAll('.answer-cb').forEach(cb => { cb.classList.remove('checked'); cb.textContent = ''; });
+      $('merge-bar-' + id).classList.remove('visible');
+      $('merge-input-' + id).value = '';
+    };
   }
 
-  // Select all checkbox
-  document.getElementById('select-all').addEventListener('change', (e) => {
-    document.querySelectorAll('.answer-check').forEach(cb => cb.checked = e.target.checked);
-    updateMergeVisibility();
-  });
+  // Editor
+  $('btn-manage').onclick = () => {
+    const ed = $('editor');
+    ed.style.display = ed.style.display === 'none' ? '' : 'none';
+  };
 
-  document.getElementById('answers-tbody').addEventListener('change', () => {
-    updateMergeVisibility();
-  });
-
-  function updateMergeVisibility() {
-    const checked = document.querySelectorAll('.answer-check:checked');
-    document.getElementById('merge-tool').style.display = checked.length >= 2 ? 'block' : 'none';
-  }
-
-  // Merge
-  document.getElementById('btn-merge').addEventListener('click', async () => {
-    const checked = document.querySelectorAll('.answer-check:checked');
-    const texts = Array.from(checked).map(cb => cb.dataset.text);
-    const canonical = document.getElementById('merge-canonical').value.trim();
-    if (!canonical) return alert('Donne un texte canonique');
-
-    await api('/api/admin/merge', {
-      method: 'POST',
-      body: JSON.stringify({
-        question_id: Number(currentDetailId),
-        answer_texts: texts,
-        canonical_text: canonical,
-      }),
+  function renderEditorTabs() {
+    const c = $('club-tabs'); c.innerHTML = '';
+    categories.forEach(cat => {
+      const club = CLUBS[cat.name] || { emoji: '', color: '#888' };
+      const b = document.createElement('button');
+      b.className = 'club-tab' + (editorClub === cat.name ? ' active' : '');
+      b.textContent = club.emoji + ' ' + cat.name;
+      if (editorClub === cat.name) b.style.cssText = 'background:' + club.color + ';border-color:' + club.color;
+      b.onclick = () => { editorClub = cat.name; renderEditorTabs(); renderEditor(); };
+      c.appendChild(b);
     });
+    // Set add button color
+    const club = CLUBS[editorClub] || { color: '#888' };
+    $('btn-add-q').style.background = club.color;
+  }
 
-    document.getElementById('merge-canonical').value = '';
-    loadDetail(currentDetailId);
-  });
+  function renderEditor() {
+    const list = $('editor-list'); list.innerHTML = '';
+    const catObj = categories.find(c => c.name === editorClub);
+    if (!catObj) return;
+    const qs = questions.filter(q => q.category_id === catObj.id);
+    qs.forEach((q, i) => {
+      const item = document.createElement('div');
+      item.className = 'editor-item';
+      item.innerHTML = '<span class="num">' + (i + 1) + '.</span><span class="qtxt">' + esc(q.text) + '</span>' +
+        '<button class="edit-btn" title="Modifier">✏️</button><button class="del-btn" title="Supprimer">🗑️</button>';
+      // Edit
+      item.querySelector('.edit-btn').onclick = () => {
+        item.innerHTML = '<span class="num">' + (i + 1) + '.</span>' +
+          '<input class="edit-input" value="' + esc(q.text) + '">' +
+          '<button class="save-btn" style="color:#22C55E">✓</button><button class="cancel-btn" style="color:#888">✕</button>';
+        item.querySelector('.save-btn').onclick = async () => {
+          const val = item.querySelector('.edit-input').value.trim();
+          if (!val) return;
+          await api('/api/admin/questions/' + q.id, { method: 'PUT', body: JSON.stringify({ text: val, category_id: q.category_id }) });
+          await loadAll();
+        };
+        item.querySelector('.cancel-btn').onclick = () => renderEditor();
+        item.querySelector('.edit-input').focus();
+      };
+      // Delete
+      item.querySelector('.del-btn').onclick = async () => {
+        await api('/api/admin/questions/' + q.id, { method: 'DELETE' });
+        await loadAll();
+      };
+      list.appendChild(item);
+    });
+  }
 
-  // Back
-  document.getElementById('btn-back').addEventListener('click', () => {
-    showView('dashboard');
-    loadDashboard();
-  });
+  $('btn-add-q').onclick = async () => {
+    const val = $('add-input').value.trim();
+    if (!val) return;
+    const catObj = categories.find(c => c.name === editorClub);
+    if (!catObj) return;
+    await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ category_id: catObj.id, text: val }) });
+    $('add-input').value = '';
+    await loadAll();
+  };
 
-  // --------------- Export & Reset ---------------
+  // Export
+  $('btn-export').onclick = () => { window.location.href = '/api/admin/export'; };
 
-  document.getElementById('btn-export').addEventListener('click', () => {
-    window.location.href = '/api/admin/export';
-  });
-
-  document.getElementById('btn-reset').addEventListener('click', async () => {
-    if (!confirm('Supprimer TOUTES les réponses ? Cette action est irréversible.')) return;
-    if (!confirm('Vraiment sûr ? Toutes les données seront perdues.')) return;
+  // Reset
+  $('btn-reset').onclick = () => { $('confirm-reset').style.display = ''; };
+  $('reset-no').onclick = () => { $('confirm-reset').style.display = 'none'; };
+  $('reset-yes').onclick = async () => {
     await api('/api/admin/reset', { method: 'POST' });
-    loadDashboard();
-  });
+    $('confirm-reset').style.display = 'none';
+    expandedId = null;
+    await loadAll();
+  };
 
-  // --------------- Helpers ---------------
-
-  function esc(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-  }
-
-  // --------------- Init ---------------
   checkAuth();
 })();
