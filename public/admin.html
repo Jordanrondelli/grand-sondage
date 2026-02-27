@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Le Grand Sondage</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="admin-body">
+
+  <!-- Login -->
+  <div id="view-login" class="screen active">
+    <div class="card login-card">
+      <h1>Admin</h1>
+      <form id="login-form">
+        <input type="password" id="login-password" class="input" placeholder="Mot de passe" autocomplete="current-password">
+        <button type="submit" class="btn btn-primary">Connexion</button>
+      </form>
+      <p id="login-error" class="error-text" style="display:none"></p>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="view-dashboard" class="screen">
+    <div class="admin-container">
+      <header class="admin-header">
+        <h1>Dashboard</h1>
+        <div class="admin-actions">
+          <a href="/" class="btn btn-ghost btn-sm">Voir le sondage</a>
+          <button id="btn-export" class="btn btn-ghost btn-sm">Export CSV</button>
+          <button id="btn-reset" class="btn btn-danger btn-sm">Reset</button>
+          <button id="btn-logout" class="btn btn-ghost btn-sm">Déconnexion</button>
+        </div>
+      </header>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-label">Réponses totales</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-complete">0/0</div>
+          <div class="stat-label">Questions complètes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-progress">0%</div>
+          <div class="stat-label">Progression globale</div>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-wrapper">
+        <div id="progress-bar" class="progress-bar" style="width:0%"></div>
+      </div>
+
+      <!-- Categories & Questions -->
+      <div class="section">
+        <div class="section-header">
+          <h2>Questions par catégorie</h2>
+          <button id="btn-add-question" class="btn btn-primary btn-sm">+ Ajouter</button>
+        </div>
+        <div id="questions-list"></div>
+      </div>
+
+      <!-- Add/Edit Form (hidden by default) -->
+      <div id="question-form-wrapper" class="section" style="display:none">
+        <h3 id="form-title">Ajouter une question</h3>
+        <form id="question-form">
+          <input type="hidden" id="form-question-id">
+          <select id="form-category" class="input">
+            <option value="">-- Catégorie --</option>
+          </select>
+          <textarea id="form-text" class="input textarea" placeholder="Texte de la question" rows="3"></textarea>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+            <button type="button" id="form-cancel" class="btn btn-ghost btn-sm">Annuler</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Question Detail -->
+  <div id="view-detail" class="screen">
+    <div class="admin-container">
+      <button id="btn-back" class="btn btn-ghost btn-sm">&larr; Retour</button>
+      <h2 id="detail-question-text" class="detail-title"></h2>
+      <div class="detail-meta">
+        <span id="detail-count"></span>
+        <span id="detail-category" class="badge"></span>
+      </div>
+
+      <!-- Top 5 Indicator -->
+      <div id="top5-indicator" class="top5-indicator"></div>
+
+      <!-- Answers Table -->
+      <div class="table-wrapper">
+        <table class="answers-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all"></th>
+              <th>#</th>
+              <th>Réponse</th>
+              <th>Nombre</th>
+              <th>%</th>
+            </tr>
+          </thead>
+          <tbody id="answers-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Merge Tool -->
+      <div id="merge-tool" class="merge-tool" style="display:none">
+        <h3>Fusionner les réponses sélectionnées</h3>
+        <input type="text" id="merge-canonical" class="input" placeholder="Texte canonique (ex: mcdo)">
+        <button id="btn-merge" class="btn btn-primary btn-sm">Fusionner</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>
