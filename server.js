@@ -309,20 +309,26 @@ app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
     if (!question) return res.status(404).json({ error: 'Introuvable' });
     const answers = await db.getAnswersGrouped(req.params.id);
     const totalCount = answers.reduce((s, a) => s + a.count, 0);
-    const top5 = answers.slice(0, 5);
-    const top5Count = top5.reduce((s, a) => s + a.count, 0);
+    const withPct = answers.map(a => ({
+      ...a, percentage: totalCount > 0 ? (a.count / totalCount) * 100 : 0
+    }));
+
+    // 3 indicators
+    const top1Pct = withPct[0]?.percentage || 0;
+    const above2pct = withPct.filter(a => a.percentage >= 2).length;
+    const top5Count = withPct.slice(0, 5).reduce((s, a) => s + a.count, 0);
     const top5Pct = totalCount > 0 ? (top5Count / totalCount) * 100 : 0;
-    let top5Status = 'neutral';
-    if (totalCount >= 20) {
-      if (top5Pct >= 60 && top5Pct <= 85) top5Status = 'good';
-      else if (top5Pct > 85) top5Status = 'concentrated';
-      else if (top5Pct < 60) top5Status = 'scattered';
-    }
+
+    const trapClear = top1Pct >= 15;
+    const stepsOk = above2pct >= 8 ? 'good' : above2pct >= 5 ? 'mid' : 'bad';
+    const riskOk = top5Pct < 90;
+
+    let checkCount = (trapClear ? 1 : 0) + (stepsOk === 'good' ? 1 : 0) + (riskOk ? 1 : 0);
+    let verdict = checkCount >= 3 ? 'perfect' : checkCount >= 2 ? 'ok' : 'bad';
+
     res.json({
-      question, answers: answers.map(a => ({
-        ...a, percentage: totalCount > 0 ? (a.count / totalCount) * 100 : 0
-      })),
-      totalCount, top5Pct, top5Status
+      question, answers: withPct, totalCount, top5Pct,
+      indicators: { trapClear, top1Pct, stepsOk, above2pct, riskOk, verdict }
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
