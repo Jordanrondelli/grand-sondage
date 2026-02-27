@@ -49,6 +49,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .btn-validate{background:var(--red);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s;white-space:nowrap}
 .btn-validate.dim{opacity:.3;pointer-events:none}
 .hint{font-size:13px;color:rgba(255,255,255,.2)}
+.btn-skip{background:none;border:none;color:var(--text-dark);font-size:13px;cursor:pointer;padding:10px 0;margin-top:8px;font-family:inherit;transition:color .2s}
+.btn-skip:hover{color:var(--text-gray)}
 .fire-count{font-size:12px;color:var(--text-dark);margin-top:12px}
 
 /* Result screens */
