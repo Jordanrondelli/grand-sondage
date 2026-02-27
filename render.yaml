@@ -1,0 +1,22 @@
+databases:
+  - name: survey-db
+    plan: free
+    databaseName: survey
+    user: survey
+
+services:
+  - type: web
+    name: grand-sondage
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASSWORD
+        value: clubsecret2026
+      - key: DATABASE_URL
+        fromDatabase:
+          name: survey-db
+          property: connectionString
