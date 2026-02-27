@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Le Grand Sondage</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Welcome Screen -->
+    <div id="screen-welcome" class="screen active">
+      <div class="card welcome-card">
+        <h1 class="title">Le Grand<br><span class="accent">Sondage</span></h1>
+        <p class="subtitle">Aide-nous à construire le jeu !</p>
+        <div class="rules">
+          <div class="rule">
+            <span class="rule-icon">☝️</span>
+            <span>Une seule réponse par question</span>
+          </div>
+          <div class="rule">
+            <span class="rule-icon">⚡</span>
+            <span>Sois spontané, pas de triche</span>
+          </div>
+          <div class="rule">
+            <span class="rule-icon">⏱️</span>
+            <span>30 secondes par question</span>
+          </div>
+        </div>
+        <button id="btn-start" class="btn btn-primary btn-large">Commencer</button>
+      </div>
+    </div>
+
+    <!-- Question Screen -->
+    <div id="screen-question" class="screen">
+      <div class="card question-card">
+        <div class="timer-container">
+          <div id="timer-bar" class="timer-bar"></div>
+        </div>
+        <div id="timer-text" class="timer-text">30s</div>
+        <div id="question-counter" class="question-counter"></div>
+        <h2 id="question-text" class="question-text"></h2>
+        <form id="answer-form">
+          <input
+            type="text"
+            id="answer-input"
+            class="input"
+            placeholder="Ta réponse..."
+            autocomplete="off"
+            maxlength="200"
+          >
+          <button type="submit" id="btn-submit" class="btn btn-primary">Valider</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Transition Screen -->
+    <div id="screen-transition" class="screen">
+      <div class="card transition-card">
+        <div class="checkmark">✓</div>
+        <p>Réponse enregistrée !</p>
+      </div>
+    </div>
+
+    <!-- Done Screen -->
+    <div id="screen-done" class="screen">
+      <div class="card done-card">
+        <div class="done-icon">🎉</div>
+        <h2>Merci !</h2>
+        <p>Tu as répondu à toutes les questions disponibles pour le moment.</p>
+        <p class="done-sub">Les résultats serviront à construire le jeu.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/survey.js"></script>
+</body>
+</html>

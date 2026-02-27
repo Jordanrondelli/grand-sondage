@@ -1,0 +1,21 @@
+app = "grand-sondage"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[mounts]
+  source = "survey_data"
+  destination = "/data"
+
+[env]
+  DB_PATH = "/data/survey.db"
+  NODE_ENV = "production"
+  ADMIN_PASSWORD = "clubsecret2026"
