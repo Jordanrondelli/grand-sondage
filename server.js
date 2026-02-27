@@ -403,6 +403,21 @@ app.put('/api/admin/settings/auto-merge', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.get('/api/admin/settings/video-mode', requireAdmin, async (req, res) => {
+  try {
+    const val = await db.getSetting('video_mode');
+    res.json({ enabled: val === '1' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/settings/video-mode', requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await db.setSetting('video_mode', enabled ? '1' : '0');
+    res.json({ ok: true, enabled: !!enabled });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
   try {
     const rows = await db.getAllAnswersForExport();

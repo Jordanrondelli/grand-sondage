@@ -155,7 +155,7 @@ async function init() {
 
 // --- Queries ---
 
-const THRESHOLD = 100;
+const THRESHOLD = 1000;
 
 async function getAvailableQuestion(excludeIds) {
   if (isPostgres) {

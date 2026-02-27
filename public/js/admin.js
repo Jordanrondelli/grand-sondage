@@ -7,9 +7,10 @@
 
   const $ = id => document.getElementById(id);
   let categories = [], questions = [], bannedWords = [], corrections = [];
-  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true;
+  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false;
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
+  function vCount(n) { return videoMode ? Math.round(n / 10) : n; }
   function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   async function api(url, opts) {
     const res = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...opts?.headers } });
@@ -33,13 +34,15 @@
   // Load
   async function loadAll() {
     try {
-      const [sr, qr, cr, br, corr, amr] = await Promise.all([
+      const [sr, qr, cr, br, corr, amr, vmr] = await Promise.all([
         api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories'),
-        api('/api/admin/banned-words'), api('/api/admin/corrections'), api('/api/admin/settings/auto-merge')
+        api('/api/admin/banned-words'), api('/api/admin/corrections'), api('/api/admin/settings/auto-merge'),
+        api('/api/admin/settings/video-mode')
       ]);
       const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
       bannedWords = await br.json(); corrections = await corr.json();
       const amData = await amr.json(); autoMerge = amData.enabled;
+      const vmData = await vmr.json(); videoMode = vmData.enabled;
       renderStats(stats);
       renderFilters();
       renderCards();
@@ -49,12 +52,16 @@
       renderBanned();
       renderCorrections();
       renderAutoMerge();
+      renderVideoMode();
     } catch (e) { if (e.message !== 'unauth') console.error('loadAll error:', e); }
   }
 
   // Stats
+  let lastStats = null;
   function renderStats(s) {
-    $('s-total').textContent = s.totalAnswers;
+    if (s) lastStats = s; else s = lastStats;
+    if (!s) return;
+    $('s-total').textContent = vCount(s.totalAnswers);
     $('s-complete').textContent = s.completeQuestions + '/' + s.totalQuestions;
     const pct = s.totalQuestions > 0 ? Math.round((s.completeQuestions / s.totalQuestions) * 100) : 0;
     $('s-pct').textContent = pct + '%';
@@ -89,7 +96,11 @@
       const club = CLUBS[q.category_name] || { emoji: '', color: '#888' };
       const card = document.createElement('div');
       card.className = 'q-card' + (expandedId === q.id ? ' open' : '');
-      const countColor = q.answer_count >= 100 ? '#22C55E' : q.answer_count > 50 ? '#F59E0B' : '#888';
+      const displayCount = vCount(q.answer_count);
+      const displayMax = videoMode ? 100 : 1000;
+      const thresholdFull = videoMode ? 100 : 1000;
+      const thresholdMid = videoMode ? 50 : 500;
+      const countColor = displayCount >= thresholdFull ? '#22C55E' : displayCount > thresholdMid ? '#F59E0B' : '#888';
       const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
       const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
       const rejLabel = q.rejected_count > 0 ? ' · 🚫 ' + q.rejected_count + ' rejetée' + (q.rejected_count > 1 ? 's' : '') : '';
@@ -100,7 +111,7 @@
             '<div class="q-card-text">' + esc(q.text) + '</div>' +
             '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + rejLabel + '</div>' +
           '</div>' +
-          '<div class="q-card-count" style="color:' + countColor + '">' + q.answer_count + '<span style="color:#555;font-size:13px">/100</span></div>' +
+          '<div class="q-card-count" style="color:' + countColor + '">' + displayCount + '<span style="color:#555;font-size:13px">/' + displayMax + '</span></div>' +
         '</div>' +
         '<div class="q-card-detail" id="detail-' + q.id + '"></div>';
       card.querySelector('.q-card-header').onclick = () => toggleCard(q.id);
@@ -150,16 +161,17 @@
     html += '<div class="answer-list" id="alist-' + id + '">';
     data.answers.forEach((a, i) => {
       const barClass = a.percentage >= 10 ? 'bar-trap' : a.percentage >= 3 ? 'bar-smart' : 'bar-risky';
+      const displayC = vCount(a.count);
       html += '<div class="answer-row-item" data-norm="' + esc(a.normalized) + '">' +
         '<div class="answer-cb" data-norm="' + esc(a.normalized) + '"></div>' +
         '<span class="answer-rank">' + (i + 1) + '</span>' +
         '<span class="answer-name">' + esc(a.sample_text) + '</span>' +
         '<div class="answer-minibar"><div class="answer-minibar-fill ' + barClass + '" style="width:' + Math.min(a.percentage, 100) + '%"></div></div>' +
-        '<span class="answer-stat">' + a.count + ' (' + a.percentage.toFixed(1) + '%)</span></div>';
+        '<span class="answer-stat">' + displayC + ' (' + a.percentage.toFixed(1) + '%)</span></div>';
     });
     html += '</div>';
     html += '<div class="merge-bar" id="merge-bar-' + id + '"><div class="merge-label" id="merge-label-' + id + '"></div><div class="merge-row"><input class="merge-input" id="merge-input-' + id + '"><button class="btn-merge" id="merge-go-' + id + '">Fusionner</button><button class="btn-merge-cancel" id="merge-cancel-' + id + '">Annuler</button></div></div>';
-    html += '<div class="answer-footer">' + data.answers.length + ' réponses uniques — cliquer pour sélectionner et fusionner</div>';
+    html += '<div class="answer-footer">' + data.answers.length + ' réponses uniques — ' + vCount(data.totalCount) + ' au total — cliquer pour sélectionner et fusionner</div>';
     det.innerHTML = html;
 
     // Click handlers
@@ -284,6 +296,20 @@
     autoMerge = !autoMerge;
     renderAutoMerge();
     await api('/api/admin/settings/auto-merge', { method: 'PUT', body: JSON.stringify({ enabled: autoMerge }) });
+  };
+
+  // --- Video Mode toggle ---
+  function renderVideoMode() {
+    const btn = $('btn-video-mode');
+    btn.textContent = videoMode ? 'Activé' : 'Désactivé';
+    btn.className = 'toggle-btn ' + (videoMode ? 'on' : 'off');
+  }
+  $('btn-video-mode').onclick = async () => {
+    videoMode = !videoMode;
+    renderVideoMode();
+    renderStats();
+    renderCards();
+    await api('/api/admin/settings/video-mode', { method: 'PUT', body: JSON.stringify({ enabled: videoMode }) });
   };
 
   // --- Banned Words ---
