@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const compression = require('compression');
 const path = require('path');
 const crypto = require('crypto');
 const db = require('./db');
@@ -59,6 +60,7 @@ function rateLimit(req, res, next) {
 // --- Middleware ---
 
 app.set('trust proxy', 1);
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
@@ -66,7 +68,10 @@ app.use(session({
   resave: false, saveUninitialized: false,
   cookie: { secure: false, httpOnly: true, maxAge: 86400000 }
 }));
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: false }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
+
+// Health check (used by Render + external ping services)
+app.get('/health', (req, res) => res.status(200).send('ok'));
 
 function requireAdmin(req, res, next) {
   if (req.session?.isAdmin) return next();
