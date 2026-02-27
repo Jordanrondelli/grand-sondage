@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'clubsecret2026';
 
-// --- Normalization ---
+// --- Normalization & Validation ---
 
 function normalizeAnswer(text) {
   return text
@@ -17,6 +17,20 @@ function normalizeAnswer(text) {
     .replace(/[^a-zà-ÿ0-9\s''\-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function isGibberish(text) {
+  // Too short (single char or 2 chars)
+  if (text.length < 3) return true;
+  // Only repeated same character: "aaa", "..."
+  if (/^(.)\1+$/.test(text)) return true;
+  // No vowel at all (for strings 3+ chars) — not a real word
+  if (!/[aeiouyàâäéèêëïîôùûüÿœæ]/i.test(text)) return true;
+  // 5+ consonants in a row — keyboard mash like "jdnjizdn"
+  if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(text)) return true;
+  // Same consonant 3+ times in a row: "bbb", "kkk"
+  if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(text)) return true;
+  return false;
 }
 
 // --- Rate limiter ---
@@ -68,6 +82,8 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     const normalized = normalizeAnswer(text);
     if (!normalized || normalized.length > 120)
       return res.status(400).json({ error: 'Invalide' });
+    if (isGibberish(normalized))
+      return res.status(400).json({ error: 'Réponse incohérente' });
 
     const count = await db.getAnswerCount(question_id);
     if (count >= db.THRESHOLD)
