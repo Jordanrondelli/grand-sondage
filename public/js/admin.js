@@ -1,13 +1,13 @@
 (function () {
   const CLUBS = {
-    'années 2000': { emoji: '📼', color: '#E94560' },
+    'vacances':    { emoji: '🏖️', color: '#E94560' },
     'nourriture':  { emoji: '🍔', color: '#F5A623' },
     'cinéma':      { emoji: '🎬', color: '#7B68EE' },
   };
 
   const $ = id => document.getElementById(id);
   let categories = [], questions = [], bannedWords = [], corrections = [];
-  let activeFilter = null, editorClub = null, expandedId = null;
+  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true;
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
   function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -33,12 +33,13 @@
   // Load
   async function loadAll() {
     try {
-      const [sr, qr, cr, br, corr] = await Promise.all([
+      const [sr, qr, cr, br, corr, amr] = await Promise.all([
         api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories'),
-        api('/api/admin/banned-words'), api('/api/admin/corrections')
+        api('/api/admin/banned-words'), api('/api/admin/corrections'), api('/api/admin/settings/auto-merge')
       ]);
       const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
       bannedWords = await br.json(); corrections = await corr.json();
+      const amData = await amr.json(); autoMerge = amData.enabled;
       renderStats(stats);
       renderFilters();
       renderCards();
@@ -47,6 +48,7 @@
       renderEditor();
       renderBanned();
       renderCorrections();
+      renderAutoMerge();
     } catch (e) { if (e.message !== 'unauth') console.error('loadAll error:', e); }
   }
 
@@ -258,6 +260,18 @@
   }
   $('btn-add-q').onclick = addQuestion;
   $('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addQuestion(); });
+
+  // --- Auto-merge toggle ---
+  function renderAutoMerge() {
+    const btn = $('btn-auto-merge');
+    btn.textContent = autoMerge ? 'Activé' : 'Désactivé';
+    btn.className = 'toggle-btn ' + (autoMerge ? 'on' : 'off');
+  }
+  $('btn-auto-merge').onclick = async () => {
+    autoMerge = !autoMerge;
+    renderAutoMerge();
+    await api('/api/admin/settings/auto-merge', { method: 'PUT', body: JSON.stringify({ enabled: autoMerge }) });
+  };
 
   // --- Banned Words ---
   $('btn-banned').onclick = () => { $('banned-section').classList.toggle('hidden'); };

@@ -68,6 +68,7 @@ async function init() {
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
       CREATE TABLE IF NOT EXISTS banned_words (id SERIAL PRIMARY KEY, word TEXT NOT NULL UNIQUE);
       CREATE TABLE IF NOT EXISTS corrections (id SERIAL PRIMARY KEY, wrong TEXT NOT NULL UNIQUE, correct TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS skip_count INTEGER DEFAULT 0").catch(() => {});
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rejected_count INTEGER DEFAULT 0").catch(() => {});
@@ -80,40 +81,44 @@ async function init() {
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
       CREATE TABLE IF NOT EXISTS banned_words (id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE);
       CREATE TABLE IF NOT EXISTS corrections (id INTEGER PRIMARY KEY AUTOINCREMENT, wrong TEXT NOT NULL UNIQUE, correct TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN skip_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN rejected_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN response_time INTEGER"); } catch {}
   }
 
+  // One-time migration: replace old clubs with new ones
+  const oldCat = await get("SELECT id FROM categories WHERE name = $1", ['années 2000']);
+  if (oldCat) {
+    await runNoReturn("DELETE FROM answers");
+    await runNoReturn("DELETE FROM questions");
+    await runNoReturn("DELETE FROM categories");
+  }
+
   const row = await get('SELECT COUNT(*) as c FROM categories');
   if (Number(row.c) === 0) {
-    await run("INSERT INTO categories (name) VALUES ($1)", ['années 2000']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['vacances']);
     await run("INSERT INTO categories (name) VALUES ($1)", ['nourriture']);
     await run("INSERT INTO categories (name) VALUES ($1)", ['cinéma']);
   }
 
-  // Seed all 15 questions (idempotent — skips duplicates)
+  // Seed questions (idempotent — skips duplicates)
   const cats = await all("SELECT * FROM categories");
   const catMap = {};
   cats.forEach(c => { catMap[c.name] = c.id; });
 
   const seedQuestions = [
-    [catMap['années 2000'], "Quel est LE site internet que tout le monde utilisait dans les années 2000 ?"],
-    [catMap['années 2000'], "Quel est L'objet que tous les ados avaient dans les années 2000 ?"],
-    [catMap['années 2000'], "Quel est LE dessin animé que vous regardiez avant d'aller à l'école dans les années 2000 ?"],
-    [catMap['années 2000'], "Quel est LE mensonge que tous les enfants des années 2000 ont dit à leurs parents à cause d'internet ?"],
-    [catMap['années 2000'], "Quelle est LA pub des années 2000 dont tout le monde se souvient du slogan ?"],
-    [catMap['nourriture'], "Quel est L'aliment que vous mangez en cachette devant le frigo ?"],
-    [catMap['nourriture'], "Quel est LE plat que vous commandez en livraison quand vous avez la flemme ?"],
-    [catMap['nourriture'], "Quel est LE plat que vous avez menti en disant que vous l'aimiez, pour faire genre ?"],
-    [catMap['nourriture'], "Quel est L'aliment que les enfants détestent mais que les adultes adorent ?"],
-    [catMap['nourriture'], "Si votre frigo pouvait parler, quel serait son principal reproche envers vous ?"],
+    [catMap['vacances'], "Tu es au bar en vacances, qu'est-ce que tu commandes ?"],
+    [catMap['vacances'], "Quel est LE pays où tu rêves d'aller ?"],
+    [catMap['vacances'], "Quel est LE truc que tu oublies toujours dans ta valise ?"],
+    [catMap['vacances'], "Quel est LE truc le plus énervant en avion ?"],
+    [catMap['nourriture'], "Quel est L'aliment que tu manges en cachette dans le frigo ?"],
+    [catMap['nourriture'], "Qu'est ce que tu commandes en livraison quand t'as la flemme de faire a manger ?"],
+    [catMap['nourriture'], "Quel est LE truc que tu grignotes devant la télé ?"],
     [catMap['cinéma'], "Quel est LE méchant de film que tout le monde connaît ?"],
-    [catMap['cinéma'], "Quel est LE cliché qu'on voit dans TOUS les films d'horreur ?"],
-    [catMap['cinéma'], "Quel est LE film que vous dites avoir vu mais qu'en vrai vous n'avez jamais regardé ?"],
-    [catMap['cinéma'], "Quel est LE film d'animation qui fait pleurer les adultes ?"],
-    [catMap['cinéma'], "Quel est L'acteur qui joue toujours exactement le même rôle dans tous ses films ?"],
+    [catMap['cinéma'], "Quel est ton genre de film préféré ? (horreur, comédie, science fiction, etc...)"],
+    [catMap['cinéma'], "Quel est LE Disney que tu préfères ?"],
   ];
 
   for (const [catId, text] of seedQuestions) {
@@ -142,6 +147,10 @@ async function init() {
     const exists = await get("SELECT id FROM corrections WHERE wrong = $1", [w]);
     if (!exists) await runNoReturn("INSERT INTO corrections (wrong, correct) VALUES ($1, $2)", [w, c]);
   }
+
+  // Seed settings
+  const am = await getSetting('auto_merge');
+  if (am === null) await setSetting('auto_merge', '1');
 }
 
 // --- Queries ---
@@ -240,6 +249,24 @@ async function getAllAnswersForExport() {
   return rows.map(r => ({ ...r, count: Number(r.count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
 
+async function getSetting(key) {
+  const row = await get("SELECT value FROM settings WHERE key = $1", [key]);
+  return row ? row.value : null;
+}
+
+async function setSetting(key, value) {
+  if (isPostgres) {
+    await pool.query("INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [key, value]);
+  } else {
+    sqlite.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+  }
+}
+
+async function getExistingAnswers(qid) {
+  const rows = await all("SELECT text, COUNT(*) as count FROM answers WHERE question_id = $1 GROUP BY text ORDER BY count DESC", [qid]);
+  return rows.map(r => ({ text: r.text, count: Number(r.count) }));
+}
+
 async function incrementRejected(qid) {
   await runNoReturn("UPDATE questions SET rejected_count = COALESCE(rejected_count, 0) + 1 WHERE id = $1", [qid]);
 }
@@ -302,5 +329,6 @@ module.exports = {
   deleteAllAnswers, insertCategory,
   getBannedWords, addBannedWord, deleteBannedWord,
   getCorrections, addCorrection, deleteCorrection,
+  getSetting, setSetting, getExistingAnswers,
   THRESHOLD,
 };
