@@ -231,15 +231,20 @@
     });
   }
 
-  $('btn-add-q').onclick = async () => {
+  async function addQuestion() {
     const val = $('add-input').value.trim();
     if (!val) return;
     const catObj = categories.find(c => c.name === editorClub);
     if (!catObj) return;
-    await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ category_id: catObj.id, text: val }) });
-    $('add-input').value = '';
-    await loadAll();
-  };
+    try {
+      const r = await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ category_id: catObj.id, text: val }) });
+      if (!r.ok) { alert('Erreur lors de l\'ajout'); return; }
+      $('add-input').value = '';
+      await loadAll();
+    } catch (e) { if (e.message !== 'unauth') alert('Erreur réseau'); }
+  }
+  $('btn-add-q').onclick = addQuestion;
+  $('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addQuestion(); });
 
   // Export
   $('btn-export').onclick = () => { window.location.href = '/api/admin/export'; };
