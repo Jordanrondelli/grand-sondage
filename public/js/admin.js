@@ -6,7 +6,8 @@
   };
 
   const $ = id => document.getElementById(id);
-  let categories = [], questions = [], activeFilter = null, editorClub = null, expandedId = null;
+  let categories = [], questions = [], bannedWords = [], corrections = [];
+  let activeFilter = null, editorClub = null, expandedId = null;
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
   function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -32,14 +33,20 @@
   // Load
   async function loadAll() {
     try {
-      const [sr, qr, cr] = await Promise.all([api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories')]);
+      const [sr, qr, cr, br, corr] = await Promise.all([
+        api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories'),
+        api('/api/admin/banned-words'), api('/api/admin/corrections')
+      ]);
       const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
+      bannedWords = await br.json(); corrections = await corr.json();
       renderStats(stats);
       renderFilters();
       renderCards();
       if (!editorClub && categories.length) editorClub = categories[0].name;
       renderEditorTabs();
       renderEditor();
+      renderBanned();
+      renderCorrections();
     } catch (e) { if (e.message !== 'unauth') console.error('loadAll error:', e); }
   }
 
@@ -83,12 +90,13 @@
       const countColor = q.answer_count >= 100 ? '#22C55E' : q.answer_count > 50 ? '#F59E0B' : '#888';
       const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
       const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
+      const rejLabel = q.rejected_count > 0 ? ' · 🚫 ' + q.rejected_count + ' rejetée' + (q.rejected_count > 1 ? 's' : '') : '';
       card.innerHTML =
         '<div class="q-card-header" data-qid="' + q.id + '">' +
           '<div class="q-card-left">' +
             '<div class="club-label"><span class="club-dot" style="background:' + club.color + '"></span>' + esc(q.category_name) + '</div>' +
             '<div class="q-card-text">' + esc(q.text) + '</div>' +
-            '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + '</div>' +
+            '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + rejLabel + '</div>' +
           '</div>' +
           '<div class="q-card-count" style="color:' + countColor + '">' + q.answer_count + '<span style="color:#555;font-size:13px">/100</span></div>' +
         '</div>' +
@@ -250,6 +258,67 @@
   }
   $('btn-add-q').onclick = addQuestion;
   $('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addQuestion(); });
+
+  // --- Banned Words ---
+  $('btn-banned').onclick = () => { $('banned-section').classList.toggle('hidden'); };
+
+  function renderBanned() {
+    const c = $('banned-list'); c.innerHTML = '';
+    bannedWords.forEach(bw => {
+      const tag = document.createElement('span');
+      tag.className = 'tag-item';
+      tag.innerHTML = esc(bw.word) + '<button class="tag-del" title="Supprimer">✕</button>';
+      tag.querySelector('.tag-del').onclick = async () => {
+        await api('/api/admin/banned-words/' + bw.id, { method: 'DELETE' });
+        await loadAll();
+      };
+      c.appendChild(tag);
+    });
+    if (!bannedWords.length) c.innerHTML = '<span style="font-size:12px;color:#555">Aucun mot banni</span>';
+  }
+
+  async function addBanned() {
+    const val = $('banned-input').value.trim();
+    if (!val) return;
+    await api('/api/admin/banned-words', { method: 'POST', body: JSON.stringify({ word: val }) });
+    $('banned-input').value = '';
+    await loadAll();
+  }
+  $('btn-add-banned').onclick = addBanned;
+  $('banned-input').addEventListener('keydown', e => { if (e.key === 'Enter') addBanned(); });
+
+  // --- Corrections ---
+  $('btn-corrections').onclick = () => { $('corrections-section').classList.toggle('hidden'); };
+
+  function renderCorrections() {
+    const c = $('corrections-list'); c.innerHTML = '';
+    corrections.forEach(cr => {
+      const item = document.createElement('div');
+      item.className = 'corr-item';
+      item.innerHTML = '<span class="corr-wrong">' + esc(cr.wrong) + '</span>' +
+        '<span class="corr-arrow">→</span>' +
+        '<span class="corr-right">' + esc(cr.correct) + '</span>' +
+        '<button class="corr-del" title="Supprimer">✕</button>';
+      item.querySelector('.corr-del').onclick = async () => {
+        await api('/api/admin/corrections/' + cr.id, { method: 'DELETE' });
+        await loadAll();
+      };
+      c.appendChild(item);
+    });
+    if (!corrections.length) c.innerHTML = '<span style="font-size:12px;color:#555">Aucune correction</span>';
+  }
+
+  async function addCorrection() {
+    const wrong = $('correction-wrong').value.trim();
+    const right = $('correction-right').value.trim();
+    if (!wrong || !right) return;
+    await api('/api/admin/corrections', { method: 'POST', body: JSON.stringify({ wrong: wrong, correct: right }) });
+    $('correction-wrong').value = '';
+    $('correction-right').value = '';
+    await loadAll();
+  }
+  $('btn-add-correction').onclick = addCorrection;
+  $('correction-right').addEventListener('keydown', e => { if (e.key === 'Enter') addCorrection(); });
 
   // Export
   $('btn-export').onclick = () => { window.location.href = '/api/admin/export'; };
