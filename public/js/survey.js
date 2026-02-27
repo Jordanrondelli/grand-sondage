@@ -83,22 +83,39 @@
     if (!val || !currentQ) return;
     stopTimer();
     input.disabled = true;
-    try { await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: val }) }); } catch {}
+    try {
+      const resp = await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: val }) });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        if (err.error === 'Réponse incohérente') {
+          input.disabled = false;
+          input.value = '';
+          input.placeholder = 'Écris une vraie réponse !';
+          startTimer();
+          return;
+        }
+      }
+    } catch {}
     answeredIds.add(currentQ.id);
     localStorage.setItem('answered', JSON.stringify([...answeredIds]));
     updateAlready();
     show('registered');
   }
 
+  // Skip
+  function skip() {
+    stopTimer();
+    if (currentQ) { answeredIds.add(currentQ.id); localStorage.setItem('answered', JSON.stringify([...answeredIds])); updateAlready(); }
+    loadNext();
+  }
+
   // Events
   $('btn-start').onclick = () => { updateAlready(); loadNext(); };
   $('btn-validate').onclick = submit;
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  $('btn-skip').onclick = skip;
   $('btn-next-ok').onclick = loadNext;
-  $('btn-next-timeout').onclick = () => {
-    if (currentQ) { answeredIds.add(currentQ.id); localStorage.setItem('answered', JSON.stringify([...answeredIds])); updateAlready(); }
-    loadNext();
-  };
+  $('btn-next-timeout').onclick = skip;
 
   updateAlready();
 })();
