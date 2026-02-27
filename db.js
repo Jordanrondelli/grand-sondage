@@ -69,12 +69,40 @@ async function init() {
 
   const row = await get('SELECT COUNT(*) as c FROM categories');
   if (Number(row.c) === 0) {
-    const c1 = (await run("INSERT INTO categories (name) VALUES ($1)", ['années 2000'])).lastInsertRowid;
-    const c2 = (await run("INSERT INTO categories (name) VALUES ($1)", ['nourriture'])).lastInsertRowid;
-    const c3 = (await run("INSERT INTO categories (name) VALUES ($1)", ['cinéma'])).lastInsertRowid;
-    await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [c1, "Quel est LE site internet que tout le monde utilisait dans les années 2000 ?"]);
-    await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [c2, "Quel est L'aliment que vous mangez en cachette devant le frigo ?"]);
-    await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [c3, "Quel est LE méchant de film que tout le monde connaît ?"]);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['années 2000']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['nourriture']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['cinéma']);
+  }
+
+  // Seed all 15 questions (idempotent — skips duplicates)
+  const cats = await all("SELECT * FROM categories");
+  const catMap = {};
+  cats.forEach(c => { catMap[c.name] = c.id; });
+
+  const seedQuestions = [
+    [catMap['années 2000'], "Quel est LE site internet que tout le monde utilisait dans les années 2000 ?"],
+    [catMap['années 2000'], "Quel est L'objet que tous les ados avaient dans les années 2000 ?"],
+    [catMap['années 2000'], "Quel est LE dessin animé que vous regardiez avant d'aller à l'école dans les années 2000 ?"],
+    [catMap['années 2000'], "Quel est LE mensonge que tous les enfants des années 2000 ont dit à leurs parents à cause d'internet ?"],
+    [catMap['années 2000'], "Quelle est LA pub des années 2000 dont tout le monde se souvient du slogan ?"],
+    [catMap['nourriture'], "Quel est L'aliment que vous mangez en cachette devant le frigo ?"],
+    [catMap['nourriture'], "Quel est LE plat que vous commandez en livraison quand vous avez la flemme ?"],
+    [catMap['nourriture'], "Quel est LE plat que vous avez menti en disant que vous l'aimiez, pour faire genre ?"],
+    [catMap['nourriture'], "Quel est L'aliment que les enfants détestent mais que les adultes adorent ?"],
+    [catMap['nourriture'], "Si votre frigo pouvait parler, quel serait son principal reproche envers vous ?"],
+    [catMap['cinéma'], "Quel est LE méchant de film que tout le monde connaît ?"],
+    [catMap['cinéma'], "Quel est LE cliché qu'on voit dans TOUS les films d'horreur ?"],
+    [catMap['cinéma'], "Quel est LE film que vous dites avoir vu mais qu'en vrai vous n'avez jamais regardé ?"],
+    [catMap['cinéma'], "Quel est LE film d'animation qui fait pleurer les adultes ?"],
+    [catMap['cinéma'], "Quel est L'acteur qui joue toujours exactement le même rôle dans tous ses films ?"],
+  ];
+
+  for (const [catId, text] of seedQuestions) {
+    if (!catId) continue;
+    const exists = await get("SELECT id FROM questions WHERE text = $1", [text]);
+    if (!exists) {
+      await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
+    }
   }
 }
 
