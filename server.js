@@ -86,13 +86,14 @@ app.get('/api/questions/next', async (req, res) => {
 
 app.post('/api/answers', rateLimit, async (req, res) => {
   try {
-    const { question_id, text } = req.body;
+    const { question_id, text, response_time } = req.body;
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
     const normalized = normalizeAnswer(text);
     if (!normalized || normalized.length > 120)
       return res.status(400).json({ error: 'Invalide' });
+    const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 30) ? Math.round(response_time) : null;
     if (isGibberish(normalized))
       return res.status(400).json({ error: 'Réponse incohérente' });
 
@@ -100,7 +101,14 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     if (count >= db.THRESHOLD)
       return res.status(410).json({ error: 'Complet' });
 
-    await db.insertAnswer(question_id, normalized);
+    await db.insertAnswer(question_id, normalized, rt);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/questions/:id/skip', rateLimit, async (req, res) => {
+  try {
+    await db.incrementSkip(req.params.id);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
