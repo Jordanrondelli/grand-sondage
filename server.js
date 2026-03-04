@@ -316,7 +316,39 @@ app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
   try {
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const answers = await db.getAnswersGrouped(req.params.id);
+    const rawAnswers = await db.getAnswersGrouped(req.params.id);
+
+    // Fuzzy-cluster similar answers for display
+    const clustered = [];
+    for (const item of rawAnswers) {
+      let merged = false;
+      for (const cluster of clustered) {
+        if (areSimilar(item.normalized, cluster.normalized)) {
+          cluster.count += item.count;
+          cluster.variants.push(item.normalized);
+          if (item.count > cluster.maxCount) {
+            cluster.normalized = item.normalized;
+            cluster.sample_text = item.sample_text;
+            cluster.maxCount = item.count;
+          }
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        clustered.push({
+          normalized: item.normalized,
+          sample_text: item.sample_text,
+          count: item.count,
+          maxCount: item.count,
+          variants: [item.normalized]
+        });
+      }
+    }
+    const answers = clustered
+      .sort((a, b) => b.count - a.count)
+      .map(c => ({ normalized: c.normalized, sample_text: c.sample_text, count: c.count, variants: c.variants }));
+
     const totalCount = answers.reduce((s, a) => s + a.count, 0);
     const withPct = answers.map(a => ({
       ...a, percentage: totalCount > 0 ? (a.count / totalCount) * 100 : 0

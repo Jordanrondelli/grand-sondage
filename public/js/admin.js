@@ -158,10 +158,13 @@
       '<div class="ind-row"><span class="ind-icon">' + riskIcon + '</span><span class="ind-text">' + riskText + '</span></div>' +
       '<div class="verdict ' + verdictClass + '">' + verdictText + '</div></div>';
 
+    // Build variant map for merge (cluster canonical → all variant texts)
+    const variantMap = {};
     html += '<div class="answer-list" id="alist-' + id + '">';
     data.answers.forEach((a, i) => {
       const barClass = a.percentage >= 10 ? 'bar-trap' : a.percentage >= 3 ? 'bar-smart' : 'bar-risky';
       const displayC = vCount(a.count);
+      variantMap[a.normalized] = a.variants || [a.normalized];
       html += '<div class="answer-row-item" data-norm="' + esc(a.normalized) + '">' +
         '<div class="answer-cb" data-norm="' + esc(a.normalized) + '"></div>' +
         '<span class="answer-rank">' + (i + 1) + '</span>' +
@@ -200,7 +203,12 @@
     $('merge-go-' + id).onclick = async () => {
       const canonical = $('merge-input-' + id).value.trim();
       if (!canonical) return;
-      await api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [...selectedSet], canonical_text: canonical }) });
+      // Expand selected clusters to include all variant texts
+      const allTexts = new Set();
+      for (const norm of selectedSet) {
+        (variantMap[norm] || [norm]).forEach(v => allTexts.add(v));
+      }
+      await api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [...allTexts], canonical_text: canonical }) });
       selectedSet.clear();
       $('merge-input-' + id).value = '';
       await loadAll();
