@@ -31,15 +31,23 @@
   $('display-pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
   function connectSSE() {
+    if (eventSource) { eventSource.close(); eventSource = null; }
     eventSource = new EventSource('/api/tournage/events');
+    eventSource.onopen = () => {
+      console.log('SSE connected');
+      $('display-club').textContent = '🎬 Connecté — en attente';
+      $('display-club').style.display = '';
+    };
     eventSource.onmessage = (e) => {
       try {
+        if (e.data.startsWith(':')) return; // keepalive comment
         const data = JSON.parse(e.data);
         handleEvent(data);
       } catch {}
     };
     eventSource.onerror = () => {
-      // Auto-reconnect is built into EventSource
+      console.log('SSE error, reconnecting...');
+      // EventSource auto-reconnects
     };
   }
 

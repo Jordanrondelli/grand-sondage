@@ -176,7 +176,10 @@ function rateLimit(req, res, next) {
 // --- Middleware ---
 
 app.set('trust proxy', 1);
-app.use(compression());
+app.use(compression({ filter: (req, res) => {
+  if (req.headers.accept === 'text/event-stream') return false;
+  return compression.filter(req, res);
+}}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
@@ -258,7 +261,10 @@ app.get('/api/stats/participants', async (req, res) => {
 const sseClients = new Set();
 function sendSSE(data) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
-  for (const res of sseClients) res.write(msg);
+  for (const client of sseClients) {
+    client.write(msg);
+    client.flush && client.flush();
+  }
 }
 
 // --- Admin Auth ---
@@ -515,10 +521,19 @@ app.get('/admin', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'a
 // --- Shooting mode (Tournage) ---
 
 app.get('/api/tournage/events', requireAdmin, (req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-  res.write('\n');
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Content-Encoding': 'none',
+  });
+  res.write(':\n\n'); // SSE comment keepalive
+  res.flush && res.flush();
   sseClients.add(res);
-  req.on('close', () => sseClients.delete(res));
+  // Keepalive every 15s to prevent proxy timeout
+  const keepalive = setInterval(() => { res.write(':\n\n'); res.flush && res.flush(); }, 15000);
+  req.on('close', () => { clearInterval(keepalive); sseClients.delete(res); });
 });
 
 app.get('/api/tournage/categories', requireAdmin, async (req, res) => {
