@@ -1,21 +1,260 @@
 (function () {
   const DURATION = 45;
+  const CIRCUMFERENCE = 2 * Math.PI * 46; // radius=46
+  const ENCOURAGING = ['Bien joué !', 'Merci !', 'Continue !', 'Une de plus !', 'Tu gères !', 'Parfait !', 'Top !', 'Excellent !'];
+  const CLUB_HUES = { vacances: 340, nourriture: 30, glouton: 30, 'cinéma': 260, 'ciné': 260 };
+  const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
+
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
-  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null;
+  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260;
 
   const $ = id => document.getElementById(id);
-  const screens = ['welcome','question','confirm','registered','timeout','done'];
+  const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
+
   function show(name) {
     screens.forEach(s => $('screen-' + s).classList.remove('active'));
     $('screen-' + name).classList.add('active');
   }
 
-  const MOTIVATIONAL = [
-    'Bien joué !', 'Merci pour ta réponse !', 'Continue comme ça !',
-    'Une de plus !', 'Tu gères !', 'Parfait !', 'Top !', 'Excellent !'
-  ];
+  // ============================================================
+  // ANIMATED BACKGROUND
+  // ============================================================
+  function initBackground() {
+    const bg = $('animated-bg');
+    bg.innerHTML = '';
+    // Grain overlay
+    const grain = document.createElement('div');
+    grain.className = 'bg-grain';
+    bg.appendChild(grain);
+    // Grid
+    const grid = document.createElement('div');
+    grid.className = 'bg-grid';
+    bg.appendChild(grid);
+    // Orbs
+    for (let i = 1; i <= 3; i++) {
+      const orb = document.createElement('div');
+      orb.className = 'bg-orb bg-orb-' + i;
+      orb.id = 'bg-orb-' + i;
+      bg.appendChild(orb);
+    }
+    // Pulse overlay
+    const pulse = document.createElement('div');
+    pulse.className = 'bg-pulse';
+    pulse.id = 'bg-pulse';
+    bg.appendChild(pulse);
+    // Particles
+    for (let i = 0; i < 20; i++) {
+      const p = document.createElement('div');
+      p.className = 'bg-particle';
+      const left = Math.random() * 100;
+      const delay = Math.random() * 20;
+      const dur = 18 + Math.random() * 20;
+      const size = 2 + Math.random() * 3;
+      const opacity = 0.08 + Math.random() * 0.15;
+      const drift = (Math.random() - 0.5) * 60;
+      p.style.cssText = `left:${left}%;width:${size}px;height:${size}px;opacity:${opacity};animation:particleRise ${dur}s ${delay}s linear infinite;--drift:${drift}px`;
+      p.dataset.hueOffset = ((Math.random() - 0.5) * 60).toFixed(0);
+      bg.appendChild(p);
+    }
+    setHue(260);
+  }
 
-  // Welcome
+  function setHue(hue) {
+    currentHue = hue;
+    const bg = $('animated-bg');
+    bg.style.background = `linear-gradient(160deg, hsl(${hue},30%,8%) 0%, hsl(${hue + 20},25%,4%) 50%, hsl(${hue - 20},20%,6%) 100%)`;
+    $('bg-orb-1').style.background = `radial-gradient(circle, hsla(${hue + 40},80%,50%,0.08) 0%, transparent 70%)`;
+    $('bg-orb-2').style.background = `radial-gradient(circle, hsla(${hue - 30},70%,40%,0.07) 0%, transparent 70%)`;
+    $('bg-orb-3').style.background = `radial-gradient(circle, hsla(${hue + 80},60%,55%,0.05) 0%, transparent 70%)`;
+    document.querySelectorAll('.bg-particle').forEach(p => {
+      const off = parseInt(p.dataset.hueOffset || 0);
+      const op = parseFloat(p.style.opacity) || 0.1;
+      p.style.background = `hsla(${hue + off},70%,70%,${op})`;
+    });
+  }
+
+  function setPulse(intensity) {
+    const pulse = $('bg-pulse');
+    if (intensity <= 0) {
+      pulse.style.opacity = '0';
+      return;
+    }
+    pulse.style.opacity = '1';
+    if (intensity > 0.6) {
+      pulse.style.background = `radial-gradient(circle at 50% 50%, hsla(0,80%,50%,${(intensity * 0.08).toFixed(3)}) 0%, transparent 70%)`;
+    } else {
+      pulse.style.background = `radial-gradient(circle at 50% 50%, hsla(30,80%,50%,${(intensity * 0.05).toFixed(3)}) 0%, transparent 70%)`;
+    }
+  }
+
+  // ============================================================
+  // LOGO SVG
+  // ============================================================
+  function initLogo() {
+    $('logo-3d').innerHTML = `<svg viewBox="0 0 120 120" width="120" height="120">
+      <defs>
+        <linearGradient id="face" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#FF6B8A"/><stop offset="50%" stop-color="#FF8E72"/><stop offset="100%" stop-color="#FFB347"/>
+        </linearGradient>
+        <linearGradient id="shadow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#b8405a"/><stop offset="100%" stop-color="#b5622e"/>
+        </linearGradient>
+        <linearGradient id="highlight" x1="20%" y1="0%" x2="80%" y2="100%">
+          <stop offset="0%" stop-color="#fff" stop-opacity="0.6"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="bigShadow"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.35"/></filter>
+      </defs>
+      <path d="M 38 28 Q 38 10, 62 10 Q 86 10, 86 28 Q 86 42, 68 50 Q 62 53, 62 62 L 62 66" stroke="url(#shadow)" stroke-width="16" stroke-linecap="round" fill="none" transform="translate(4,4)"/>
+      <circle cx="62" cy="86" r="9" fill="url(#shadow)" transform="translate(4,4)"/>
+      <path d="M 38 28 Q 38 10, 62 10 Q 86 10, 86 28 Q 86 42, 68 50 Q 62 53, 62 62 L 62 66" stroke="url(#face)" stroke-width="16" stroke-linecap="round" fill="none" filter="url(#bigShadow)"/>
+      <circle cx="62" cy="86" r="9" fill="url(#face)" filter="url(#bigShadow)"/>
+      <path d="M 42 26 Q 42 16, 58 14 Q 68 13, 74 18" stroke="url(#highlight)" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <circle cx="59" cy="83" r="3.5" fill="white" opacity="0.3"/>
+      <g>
+        <circle cx="95" cy="14" r="3" fill="#FFB347" opacity="0.9"><animate attributeName="opacity" values="0.9;0.2;0.9" dur="1.8s" repeatCount="indefinite"/><animate attributeName="r" values="3;4;3" dur="1.8s" repeatCount="indefinite"/></circle>
+        <circle cx="22" cy="50" r="2.5" fill="#9B8FFF" opacity="0.7"><animate attributeName="opacity" values="0.7;0.1;0.7" dur="2.2s" repeatCount="indefinite"/><animate attributeName="r" values="2.5;3.5;2.5" dur="2.2s" repeatCount="indefinite"/></circle>
+        <circle cx="88" cy="70" r="2" fill="#FF6B8A" opacity="0.8"><animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite"/><animate attributeName="r" values="2;3;2" dur="2s" repeatCount="indefinite"/></circle>
+        <circle cx="30" cy="18" r="1.5" fill="#C4B5FD" opacity="0.6"><animate attributeName="opacity" values="0.6;0.1;0.6" dur="2.8s" repeatCount="indefinite"/></circle>
+      </g>
+    </svg>`;
+  }
+
+  // ============================================================
+  // CONFETTI
+  // ============================================================
+  function burstConfetti() {
+    const container = $('confetti-container');
+    container.innerHTML = '';
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement('div');
+      const x = (Math.random() - 0.5) * 500;
+      const y = -(100 + Math.random() * 300);
+      const r = Math.random() * 720 - 360;
+      const color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+      const size = 5 + Math.random() * 8;
+      const delay = Math.random() * 0.3;
+      const isRound = Math.random() > 0.5;
+      p.style.cssText = `position:absolute;left:50%;top:50%;width:${isRound ? size : size * 0.6}px;height:${size}px;border-radius:${isRound ? '50%' : '2px'};background:${color};animation:confetti 1.2s ${delay}s cubic-bezier(0.25,0.46,0.45,0.94) forwards;transform:translate(-50%,-50%);--x:${x}px;--y:${y}px;--r:${r}deg;opacity:0`;
+      container.appendChild(p);
+    }
+    setTimeout(() => { container.innerHTML = ''; }, 2000);
+  }
+
+  // ============================================================
+  // CHECKBOXES
+  // ============================================================
+  const checks = [false, false, false];
+
+  function updateCheckboxes() {
+    document.querySelectorAll('.check-card').forEach(card => {
+      const i = parseInt(card.dataset.rule);
+      card.classList.toggle('checked', checks[i]);
+      card.querySelector('.checkbox').textContent = checks[i] ? '✓' : '';
+    });
+    const allChecked = checks.every(Boolean);
+    $('btn-start').classList.toggle('disabled', !allChecked);
+  }
+
+  document.querySelectorAll('.check-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const i = parseInt(card.dataset.rule);
+      checks[i] = !checks[i];
+      updateCheckboxes();
+    });
+  });
+
+  // ============================================================
+  // TIMER
+  // ============================================================
+  function getTimerColors(t) {
+    if (t <= 5) return { color: '#FF4D6A', light: '#FF8E72', glow: 'rgba(255,77,106,0.6)', glowSize: 22 };
+    if (t <= 15) return { color: '#FFB347', light: '#FFDA77', glow: 'rgba(255,179,71,0.4)', glowSize: 14 };
+    return { color: '#9B8FFF', light: '#C4B5FD', glow: 'rgba(155,143,255,0.2)', glowSize: 6 };
+  }
+
+  function updateTimerVisuals() {
+    const pct = timeLeft / DURATION;
+    const offset = CIRCUMFERENCE * (1 - pct);
+    const tc = getTimerColors(timeLeft);
+    const circle = $('timer-circle');
+    const num = $('timer-number');
+    const wrap = $('circular-timer-wrap');
+    const glow = $('timer-glow');
+    const topFill = $('top-timer-fill');
+
+    // Circular timer
+    circle.setAttribute('stroke-dashoffset', offset);
+    circle.style.filter = `drop-shadow(0 0 ${tc.glowSize}px ${tc.glow})`;
+    $('timer-stop1').setAttribute('stop-color', tc.color);
+    $('timer-stop2').setAttribute('stop-color', tc.light);
+    num.textContent = timeLeft;
+    num.style.color = tc.color;
+    num.style.textShadow = `0 0 ${tc.glowSize}px ${tc.glow}`;
+
+    // Shake under 5s
+    wrap.style.animation = timeLeft <= 5 ? 'timerShake 0.3s ease infinite' : 'none';
+
+    // Glow
+    glow.style.background = `radial-gradient(circle, ${tc.glow} 0%, transparent 70%)`;
+    if (timeLeft <= 15) {
+      glow.style.opacity = '1';
+      glow.classList.add('active');
+    } else {
+      glow.style.opacity = '0';
+      glow.classList.remove('active');
+    }
+
+    // Top bar
+    topFill.style.width = (pct * 100) + '%';
+    if (timeLeft <= 5) {
+      topFill.style.background = 'linear-gradient(90deg, #FF4D6A, #FF6B8A)';
+      topFill.style.boxShadow = '0 0 15px rgba(255,77,106,0.6)';
+    } else if (timeLeft <= 15) {
+      topFill.style.background = 'linear-gradient(90deg, #FFB347, #FFDA77)';
+      topFill.style.boxShadow = '0 0 10px rgba(255,179,71,0.4)';
+    } else {
+      topFill.style.background = 'linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.3))';
+      topFill.style.boxShadow = 'none';
+    }
+
+    // Screen pulse
+    const pulseIntensity = timeLeft <= 5 ? 1 : timeLeft <= 15 ? (15 - timeLeft) / 15 : 0;
+    setPulse(pulseIntensity);
+  }
+
+  function startTimer() {
+    timeLeft = DURATION;
+    updateTimerVisuals();
+    timer = setInterval(() => {
+      timeLeft--;
+      updateTimerVisuals();
+      if (timeLeft <= 0) { stopTimer(); show('timeout'); setHue(20); }
+    }, 1000);
+  }
+
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+  function getResponseTime() { return DURATION - timeLeft; }
+
+  function resumeTimer() {
+    timer = setInterval(() => {
+      timeLeft--;
+      updateTimerVisuals();
+      if (timeLeft <= 0) { stopTimer(); show('timeout'); setHue(20); }
+    }, 1000);
+  }
+
+  // ============================================================
+  // INPUT
+  // ============================================================
+  const input = $('answer-input');
+  const btnVal = $('btn-validate');
+  input.addEventListener('input', () => {
+    btnVal.classList.toggle('disabled', !input.value.trim());
+  });
+
+  // ============================================================
+  // WELCOME
+  // ============================================================
   function updateAlready() {
     const n = answeredIds.size;
     const el = $('already');
@@ -28,95 +267,65 @@
       const res = await fetch('/api/stats/participants');
       const data = await res.json();
       if (data.count > 0) {
-        $('participant-count').textContent = data.count + ' personnes ont déjà participé';
+        $('participant-text').textContent = data.count.toLocaleString() + ' personnes ont déjà participé';
+        $('live-counter').style.display = '';
       }
     } catch {}
   }
 
-  // Timer
-  function timerColor(t) { return t > 15 ? 'white' : t > 5 ? 'orange' : 'red'; }
-
-  function startTimer() {
-    timeLeft = DURATION;
-    const fill = $('timer-fill');
-    const num = $('timer-num');
-    fill.style.width = '100%';
-    fill.className = 'timer-fill white';
-    num.textContent = timeLeft;
-    num.className = 'timer-num-small white';
-
-    timer = setInterval(() => {
-      timeLeft--;
-      const c = timerColor(timeLeft);
-      fill.style.width = ((timeLeft / DURATION) * 100) + '%';
-      fill.className = 'timer-fill ' + c;
-      num.textContent = timeLeft;
-      num.className = 'timer-num-small ' + c;
-      if (timeLeft <= 0) { stopTimer(); show('timeout'); }
-    }, 1000);
-  }
-
-  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
-  function getResponseTime() { return DURATION - timeLeft; }
-
-  function resumeTimer() {
-    timer = setInterval(() => {
-      timeLeft--;
-      const c = timerColor(timeLeft);
-      $('timer-fill').style.width = ((timeLeft / DURATION) * 100) + '%';
-      $('timer-fill').className = 'timer-fill ' + c;
-      $('timer-num').textContent = timeLeft;
-      $('timer-num').className = 'timer-num-small ' + c;
-      if (timeLeft <= 0) { stopTimer(); show('timeout'); }
-    }, 1000);
-  }
-
-  // Input handling
-  const input = $('answer-input');
-  const btnVal = $('btn-validate');
-  input.addEventListener('input', () => {
-    btnVal.classList.toggle('dim', !input.value.trim());
-  });
-
-  // Load question
+  // ============================================================
+  // LOAD QUESTION
+  // ============================================================
   async function loadNext() {
     stopTimer();
+    setPulse(0);
     try {
       const res = await fetch('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds])));
       const data = await res.json();
       if (data.done) {
         $('done-text').textContent = answeredIds.size > 0
-          ? 'Tu as répondu à ' + answeredIds.size + ' questions. C\'est top !'
-          : 'Toutes les questions ont atteint leurs réponses. Le sondage est terminé !';
+          ? answeredIds.size + ' question' + (answeredIds.size > 1 ? 's' : '') + ' — c\'est top !'
+          : 'Le sondage est terminé !';
         show('done');
+        setHue(150);
+        burstConfetti();
         return;
       }
       currentQ = data;
+      const hue = CLUB_HUES[data.club] || 260;
+      setHue(hue);
       $('q-text').textContent = data.text;
       input.value = '';
       input.disabled = false;
       input.placeholder = 'Ta réponse...';
-      btnVal.classList.add('dim');
-      const fc = $('fire-count');
-      if (answeredIds.size > 0) { fc.textContent = answeredIds.size + ' réponses 🔥'; fc.style.display = ''; }
-      else { fc.style.display = 'none'; }
+      btnVal.classList.add('disabled');
+      $('phase-input').style.display = '';
+      $('phase-confirm').style.display = 'none';
       show('question');
       input.focus();
       startTimer();
-    } catch { show('done'); }
+    } catch { show('done'); setHue(150); }
   }
 
-  // Show confirmation screen (timer pauses)
+  // ============================================================
+  // CONFIRMATION
+  // ============================================================
   function showConfirmation() {
     const val = input.value.trim();
     if (!val || !currentQ) return;
     pendingAnswer = val;
-    stopTimer(); // Pause timer
+    stopTimer();
+    setPulse(0);
     $('confirm-answer-text').textContent = val.toUpperCase();
-    show('confirm');
+    $('phase-input').style.display = 'none';
+    $('phase-confirm').style.display = '';
+    // Re-trigger animation
+    const box = $('phase-confirm').querySelector('.confirm-box');
+    box.classList.remove('anim-popin');
+    void box.offsetWidth;
+    box.classList.add('anim-popin');
   }
 
-  // Confirm and submit
   async function confirmSubmit() {
     if (!pendingAnswer || !currentQ) return;
     const rt = getResponseTime();
@@ -129,6 +338,8 @@
           input.value = '';
           input.placeholder = 'Donne une vraie réponse 😉';
           pendingAnswer = null;
+          $('phase-input').style.display = '';
+          $('phase-confirm').style.display = 'none';
           show('question');
           resumeTimer();
           return;
@@ -140,22 +351,30 @@
     updateAlready();
     pendingAnswer = null;
     // Gamification
-    $('motivational-msg').textContent = MOTIVATIONAL[Math.floor(Math.random() * MOTIVATIONAL.length)];
-    $('personal-counter').textContent = 'Tu as répondu à ' + answeredIds.size + ' question' + (answeredIds.size > 1 ? 's' : '') + ' 🔥';
+    $('motivational-msg').textContent = ENCOURAGING[Math.floor(Math.random() * ENCOURAGING.length)];
+    $('personal-counter').textContent = answeredIds.size + ' réponse' + (answeredIds.size > 1 ? 's' : '') + ' 🔥';
+    // Re-trigger animations
+    $('reg-emoji').classList.remove('anim-celebrate');
+    void $('reg-emoji').offsetWidth;
+    $('reg-emoji').classList.add('anim-celebrate');
     show('registered');
+    setHue(150);
+    burstConfetti();
   }
 
-  // Edit: go back to input with answer pre-filled
   function editAnswer() {
     input.value = pendingAnswer || '';
-    btnVal.classList.toggle('dim', !input.value.trim());
+    btnVal.classList.toggle('disabled', !input.value.trim());
     pendingAnswer = null;
-    show('question');
+    $('phase-input').style.display = '';
+    $('phase-confirm').style.display = 'none';
     input.focus();
-    resumeTimer(); // Resume timer from where it was
+    resumeTimer();
   }
 
-  // Skip
+  // ============================================================
+  // SKIP
+  // ============================================================
   function skip() {
     stopTimer();
     if (currentQ) {
@@ -167,16 +386,25 @@
     loadNext();
   }
 
-  // Events
-  $('btn-start').onclick = () => { updateAlready(); loadNext(); };
-  $('btn-validate').onclick = showConfirmation;
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); showConfirmation(); } });
-  $('btn-confirm-yes').onclick = confirmSubmit;
-  $('btn-confirm-edit').onclick = editAnswer;
-  $('btn-skip').onclick = skip;
-  $('btn-next-ok').onclick = loadNext;
-  $('btn-next-timeout').onclick = skip;
+  // ============================================================
+  // EVENTS
+  // ============================================================
+  $('btn-start').addEventListener('click', () => {
+    if (checks.every(Boolean)) { updateAlready(); loadNext(); }
+  });
+  $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });
+  $('btn-confirm-yes').addEventListener('click', confirmSubmit);
+  $('btn-confirm-edit').addEventListener('click', editAnswer);
+  $('btn-next-ok').addEventListener('click', loadNext);
+  $('btn-next-timeout').addEventListener('click', skip);
 
+  // ============================================================
+  // INIT
+  // ============================================================
+  initBackground();
+  initLogo();
   updateAlready();
+  updateCheckboxes();
   loadParticipantCount();
 })();

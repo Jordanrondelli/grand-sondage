@@ -160,13 +160,13 @@ const THRESHOLD = 1000;
 async function getAvailableQuestion(excludeIds) {
   if (isPostgres) {
     const rows = await all(
-      "SELECT q.id, q.text FROM questions q WHERE q.active = 1 AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < $1 AND NOT (q.id = ANY($2::int[])) ORDER BY RANDOM() LIMIT 1",
+      "SELECT q.id, q.text, c.name as club FROM questions q JOIN categories c ON c.id = q.category_id WHERE q.active = 1 AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < $1 AND NOT (q.id = ANY($2::int[])) ORDER BY RANDOM() LIMIT 1",
       [THRESHOLD, excludeIds]
     );
     return rows[0] || null;
   } else {
     return sqlite.prepare(
-      "SELECT q.id, q.text FROM questions q WHERE q.active = 1 AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < ? AND q.id NOT IN (SELECT value FROM json_each(?)) ORDER BY RANDOM() LIMIT 1"
+      "SELECT q.id, q.text, c.name as club FROM questions q JOIN categories c ON c.id = q.category_id WHERE q.active = 1 AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < ? AND q.id NOT IN (SELECT value FROM json_each(?)) ORDER BY RANDOM() LIMIT 1"
     ).get(THRESHOLD, JSON.stringify(excludeIds)) || null;
   }
 }

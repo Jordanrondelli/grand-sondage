@@ -201,7 +201,7 @@ app.get('/api/questions/next', async (req, res) => {
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
     const q = await db.getAvailableQuestion(ex);
     if (!q) return res.json({ done: true });
-    res.json({ id: q.id, text: q.text });
+    res.json({ id: q.id, text: q.text, club: q.club });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 

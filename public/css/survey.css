@@ -1,0 +1,175 @@
+/* ============================================================
+   SURVEY PUBLIC PAGES — "La Question" Design
+   Font: Nunito | Mobile-first | Dark theme
+   ============================================================ */
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{
+  font-family:'Nunito',system-ui,-apple-system,sans-serif;
+  background:#0a0a14;color:#fff;
+  min-height:100dvh;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* ===== SCREENS ===== */
+.screen{display:none;min-height:100dvh;align-items:center;justify-content:center;padding:20px;flex-direction:column;position:relative;z-index:1}
+.screen.active{display:flex}
+.screen-inner{width:100%;text-align:center}
+
+/* ===== ANIMATED BACKGROUND ===== */
+#animated-bg{position:fixed;inset:0;z-index:0;overflow:hidden;transition:background 1.5s ease}
+.bg-grain{position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");opacity:0.4;pointer-events:none}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.012) 1px,transparent 1px);background-size:80px 80px;pointer-events:none}
+.bg-orb{position:absolute;border-radius:50%;pointer-events:none}
+.bg-orb-1{width:600px;height:600px;top:-15%;right:-15%;animation:orbFloat1 22s ease-in-out infinite}
+.bg-orb-2{width:700px;height:700px;bottom:-20%;left:-15%;animation:orbFloat2 28s ease-in-out infinite}
+.bg-orb-3{width:350px;height:350px;top:45%;left:50%;transform:translate(-50%,-50%);animation:orbFloat3 18s ease-in-out infinite}
+.bg-pulse{position:absolute;inset:0;z-index:5;pointer-events:none;animation:screenPulse 1s ease-in-out infinite;opacity:0;transition:opacity 0.5s ease}
+.bg-particle{position:absolute;border-radius:50%;bottom:-3%;pointer-events:none}
+
+/* ===== WELCOME ===== */
+.logo-3d{width:120px;height:120px;margin:0 auto 8px;animation:float 3s ease-in-out infinite,popIn 0.6s cubic-bezier(0.34,1.56,0.64,1)}
+.welcome-title{font-size:36px;font-weight:900;color:#fff;margin-bottom:24px;letter-spacing:-0.5px}
+.intro-box{background:rgba(255,255,255,0.05);border-radius:20px;padding:22px 24px;border:1px solid rgba(255,255,255,0.08);margin-bottom:0}
+.intro-text{font-size:17px;line-height:1.7;color:rgba(255,255,255,0.7);font-weight:700;text-align:center}
+.rules-checks{display:flex;flex-direction:column;gap:10px;margin:24px 0}
+.check-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;border:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:all 0.25s ease;text-align:left;user-select:none;background:rgba(255,255,255,0.03)}
+.check-card.checked{border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.06)}
+.checkbox{width:24px;height:24px;border-radius:8px;border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.25s ease;background:rgba(255,255,255,0.06);font-size:13px;color:#fff;line-height:1}
+.check-card.checked .checkbox{background:linear-gradient(135deg,#22C55E 0%,#16A34A 100%);border-color:transparent}
+.check-emoji{font-size:20px;flex-shrink:0}
+.check-text{font-size:14px;font-weight:600;line-height:1.4;color:rgba(255,255,255,0.55);transition:color 0.25s ease}
+.check-card.checked .check-text{color:rgba(255,255,255,0.85)}
+.live-counter{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,0.35);font-weight:600;margin-bottom:20px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#22C55E;animation:dotPulse 2s ease infinite;flex-shrink:0}
+.already-text{font-size:13px;color:rgba(255,255,255,0.2);margin-top:16px}
+
+/* ===== BUTTONS ===== */
+.btn-primary{display:block;width:100%;padding:16px 32px;font-size:16px;font-weight:800;color:#fff;background:linear-gradient(135deg,#FF6B8A 0%,#FF8E72 100%);border:none;border-radius:16px;box-shadow:0 4px 24px rgba(255,107,138,0.3);cursor:pointer;font-family:'Nunito',sans-serif;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1)}
+.btn-primary:hover{transform:translateY(-2px)}
+.btn-primary:active{transform:scale(0.97)!important}
+.btn-primary.disabled{opacity:0.35;cursor:not-allowed;transform:none!important}
+.btn-send{width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;background:linear-gradient(135deg,#FF6B8A 0%,#FF8E72 100%);border:none;border-radius:14px;box-shadow:0 4px 15px rgba(255,107,138,0.25);cursor:pointer;font-family:'Nunito',sans-serif;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);flex-shrink:0}
+.btn-send:hover{transform:translateY(-2px)}
+.btn-send:active{transform:scale(0.97)!important}
+.btn-send.disabled{opacity:0.3;cursor:not-allowed;transform:none!important}
+.btn-green{padding:12px 28px;font-size:15px;font-weight:800;color:#fff;background:linear-gradient(135deg,#22C55E 0%,#16A34A 100%);border:none;border-radius:12px;box-shadow:0 4px 15px rgba(34,197,94,0.25);cursor:pointer;font-family:'Nunito',sans-serif;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1)}
+.btn-green:hover{transform:translateY(-2px)}
+.btn-green:active{transform:scale(0.97)!important}
+.btn-ghost{padding:12px 28px;font-size:15px;font-weight:700;color:rgba(255,255,255,0.45);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);border-radius:12px;cursor:pointer;font-family:'Nunito',sans-serif;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1)}
+.btn-ghost:hover{transform:translateY(-2px);color:rgba(255,255,255,0.65)}
+.btn-ghost:active{transform:scale(0.97)!important}
+
+/* ===== QUESTION ===== */
+.top-timer-bar{position:fixed;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.03);z-index:10}
+.top-timer-fill{height:100%;border-radius:2px;width:100%;transition:width 1s linear,background 0.5s ease,box-shadow 0.5s ease}
+
+.circular-timer-wrap{position:relative;width:112px;height:112px;margin:0 auto 32px}
+.timer-glow{position:absolute;inset:-14px;border-radius:50%;transition:all 0.5s ease;opacity:0}
+.timer-glow.active{animation:timerGlow 1s ease-in-out infinite}
+.circular-timer-svg{transform:rotate(-90deg);position:relative;z-index:1}
+#timer-circle{transition:stroke-dashoffset 1s linear,filter 0.5s ease}
+.timer-number{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;transition:color 0.5s ease,text-shadow 0.5s ease;z-index:2}
+
+.question-text{font-size:26px;font-weight:800;color:#fff;line-height:1.5;margin-bottom:36px;padding:0 4px}
+
+.input-group{display:flex;gap:10px;margin-bottom:10px}
+.answer-input{flex:1;padding:16px 18px;font-size:16px;font-weight:600;font-family:'Nunito',sans-serif;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.07);border-radius:14px;color:#fff;transition:border-color 0.25s ease;outline:none}
+.answer-input::placeholder{color:rgba(255,255,255,0.2)}
+.answer-input:focus{border-color:rgba(255,255,255,0.25)}
+.input-hint{font-size:12px;font-weight:600;color:rgba(255,255,255,0.18)}
+
+/* ===== CONFIRM ===== */
+.confirm-box{background:rgba(255,255,255,0.04);border-radius:24px;padding:28px 24px;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;align-items:center;gap:4px}
+.confirm-label{font-size:13px;font-weight:600;color:rgba(255,255,255,0.35)}
+.confirm-value{font-size:30px;font-weight:900;color:#fff;letter-spacing:2px;margin:6px 0;text-transform:uppercase;word-break:break-word;line-height:1.3}
+.confirm-ask{font-size:14px;font-weight:600;color:rgba(255,255,255,0.4);margin-bottom:16px}
+.confirm-actions{display:flex;gap:10px}
+
+/* ===== FEEDBACK ===== */
+.feedback-emoji{font-size:64px;margin-bottom:16px}
+.feedback-msg{font-size:24px;font-weight:900;color:#fff;margin-bottom:8px}
+.feedback-counter{font-size:14px;color:rgba(255,255,255,0.4);font-weight:600;margin-bottom:32px}
+
+/* ===== CONFETTI ===== */
+#confetti-container{position:fixed;inset:0;pointer-events:none;z-index:100;overflow:hidden}
+
+/* ===== ANIMATIONS ===== */
+@keyframes popIn{
+  0%{transform:scale(0.8);opacity:0}
+  100%{transform:scale(1);opacity:1}
+}
+@keyframes slideUp{
+  0%{transform:translateY(30px);opacity:0}
+  100%{transform:translateY(0);opacity:1}
+}
+@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+@keyframes float{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-10px)}
+}
+@keyframes dotPulse{
+  0%,100%{opacity:1}
+  50%{opacity:0.3}
+}
+@keyframes orbFloat1{
+  0%,100%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(-40px,25px) scale(1.1)}
+  66%{transform:translate(20px,-15px) scale(0.95)}
+}
+@keyframes orbFloat2{
+  0%,100%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(30px,-35px) scale(1.05)}
+  66%{transform:translate(-20px,15px) scale(0.9)}
+}
+@keyframes orbFloat3{
+  0%,100%{transform:translate(-50%,-50%) scale(1)}
+  50%{transform:translate(-50%,-50%) scale(1.3)}
+}
+@keyframes particleRise{
+  0%{transform:translateY(0) translateX(0);opacity:0}
+  10%{opacity:1}
+  90%{opacity:0.8}
+  100%{transform:translateY(-110vh) translateX(var(--drift,20px));opacity:0}
+}
+@keyframes confetti{
+  0%{transform:translate(-50%,-50%) rotate(0deg);opacity:1}
+  100%{transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) rotate(var(--r));opacity:0}
+}
+@keyframes celebrateEmoji{
+  0%{transform:scale(0) rotate(-20deg);opacity:0}
+  50%{transform:scale(1.3) rotate(10deg)}
+  75%{transform:scale(0.9) rotate(-5deg)}
+  100%{transform:scale(1) rotate(0deg);opacity:1}
+}
+@keyframes timerShake{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-3px) rotate(-1deg)}
+  40%{transform:translateX(3px) rotate(1deg)}
+  60%{transform:translateX(-2px)}
+  80%{transform:translateX(2px)}
+}
+@keyframes timerGlow{
+  0%,100%{opacity:0.5}
+  50%{opacity:1}
+}
+@keyframes screenPulse{
+  0%,100%{opacity:0.3}
+  50%{opacity:1}
+}
+
+.anim-slideup{animation:slideUp 0.5s cubic-bezier(0.34,1.56,0.64,1) both}
+.anim-popin{animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1)}
+.anim-fadein{animation:fadeIn 0.3s ease}
+.anim-celebrate{animation:celebrateEmoji 0.6s cubic-bezier(0.34,1.56,0.64,1)}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:480px){
+  .welcome-title{font-size:30px}
+  .question-text{font-size:22px}
+  .confirm-value{font-size:24px}
+  .intro-text{font-size:15px}
+  .feedback-msg{font-size:20px}
+}

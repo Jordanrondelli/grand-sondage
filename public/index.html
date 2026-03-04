@@ -3,84 +3,147 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Le Sondage</title>
-  <link rel="stylesheet" href="/css/style.css?v=5">
+  <title>La Question</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/survey.css?v=1">
 </head>
 <body>
-  <nav class="nav">
-    <a href="/" class="active">Sondage</a>
-    <a href="/admin">🔒</a>
-  </nav>
+  <!-- Animated background (managed by JS) -->
+  <div id="animated-bg"></div>
 
+  <!-- Admin link (discreet) -->
+  <a href="/admin" style="position:fixed;top:12px;right:16px;z-index:50;color:rgba(255,255,255,0.08);font-size:14px;text-decoration:none">🔒</a>
+
+  <!-- ===== WELCOME ===== -->
   <div id="screen-welcome" class="screen active">
-    <div class="welcome">
-      <div class="emoji">🎤</div>
-      <h1>Le Sondage</h1>
-      <p class="desc">Ce sondage sert à préparer une vidéo YouTube. Tes réponses vont directement influencer le jeu. C'est pour ça qu'il est très important de répondre sérieusement.</p>
-      <div class="rules">
-        <div class="rule"><span class="re">☝️</span><span>Une seule réponse par question</span></div>
-        <div class="rule"><span class="re">✍️</span><span>Vérifie l'orthographe avant de valider</span></div>
-        <div class="rule"><span class="re">🚫</span><span>Tout troll, spam ou réponse absurde sera automatiquement supprimé</span></div>
+    <div class="screen-inner" style="max-width:480px">
+      <!-- Logo 3D -->
+      <div id="logo-3d" class="logo-3d"></div>
+
+      <h1 class="welcome-title anim-slideup" style="animation-delay:0.1s">La Question</h1>
+
+      <div class="anim-slideup" style="animation-delay:0.15s">
+        <div class="intro-box">
+          <p class="intro-text">
+            Ces questions vont me permettre de préparer une <strong style="color:#fff">vidéo YouTube</strong>. Tes réponses sont importantes, réponds sérieusement !
+          </p>
+        </div>
       </div>
-      <div class="participant-count" id="participant-count"></div>
-      <button class="btn-go" id="btn-start">Je suis prêt</button>
-      <div class="already" id="already" style="display:none"></div>
+
+      <div class="rules-checks anim-slideup" style="animation-delay:0.25s">
+        <div class="check-card" data-rule="0">
+          <div class="checkbox"></div>
+          <span class="check-emoji">☝️</span>
+          <span class="check-text">Une seule réponse par question</span>
+        </div>
+        <div class="check-card" data-rule="1">
+          <div class="checkbox"></div>
+          <span class="check-emoji">✍️</span>
+          <span class="check-text">Vérifie l'orthographe</span>
+        </div>
+        <div class="check-card" data-rule="2">
+          <div class="checkbox"></div>
+          <span class="check-emoji">🚫</span>
+          <span class="check-text">Troll, spam ou hors sujet = supprimé automatiquement</span>
+        </div>
+      </div>
+
+      <div class="anim-slideup" style="animation-delay:0.4s">
+        <div class="live-counter" id="live-counter" style="display:none">
+          <span class="live-dot"></span>
+          <span id="participant-text"></span>
+        </div>
+        <button class="btn-primary disabled" id="btn-start">C'est parti</button>
+        <div class="already-text" id="already" style="display:none"></div>
+      </div>
     </div>
   </div>
 
+  <!-- ===== QUESTION ===== -->
   <div id="screen-question" class="screen">
-    <div class="question-screen">
-      <div class="timer-track"><div class="timer-fill white" id="timer-fill"></div></div>
-      <div class="timer-num-small" id="timer-num">45</div>
-      <div class="q-text" id="q-text"></div>
-      <div class="answer-row">
-        <input type="text" class="answer-input" id="answer-input" placeholder="Ta réponse..." maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false">
-        <button class="btn-validate dim" id="btn-validate">Valider</button>
+    <!-- Top timer bar -->
+    <div class="top-timer-bar"><div class="top-timer-fill" id="top-timer-fill"></div></div>
+
+    <div class="screen-inner" style="max-width:500px">
+      <!-- Circular timer -->
+      <div class="circular-timer-wrap" id="circular-timer-wrap">
+        <div class="timer-glow" id="timer-glow"></div>
+        <svg width="112" height="112" class="circular-timer-svg">
+          <defs>
+            <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" id="timer-stop1" stop-color="#9B8FFF"/>
+              <stop offset="100%" id="timer-stop2" stop-color="#C4B5FD"/>
+            </linearGradient>
+          </defs>
+          <circle cx="56" cy="56" r="46" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5"/>
+          <circle id="timer-circle" cx="56" cy="56" r="46" fill="none" stroke="url(#timerGrad)" stroke-width="5" stroke-linecap="round" stroke-dasharray="289.03" stroke-dashoffset="0"/>
+        </svg>
+        <div class="timer-number" id="timer-number">45</div>
       </div>
-      <div class="hint">Réponds vite mais bien !</div>
-      <div class="hint-definitive">Ta réponse est définitive, prends le temps de bien l'écrire</div>
-      <button class="btn-skip" id="btn-skip">Passer cette question →</button>
-      <div class="fire-count" id="fire-count" style="display:none"></div>
+
+      <h1 class="question-text anim-slideup" id="q-text" style="animation-delay:0.1s"></h1>
+
+      <!-- Input phase -->
+      <div id="phase-input" class="anim-fadein">
+        <div class="input-group">
+          <input type="text" class="answer-input" id="answer-input" placeholder="Ta réponse..." maxlength="60" autocomplete="off" autocorrect="off" spellcheck="false">
+          <button class="btn-send disabled" id="btn-validate">→</button>
+        </div>
+        <p class="input-hint">Réponds vite mais bien ! Ta réponse est définitive.</p>
+      </div>
+
+      <!-- Confirm phase -->
+      <div id="phase-confirm" style="display:none">
+        <div class="confirm-box anim-popin">
+          <span class="confirm-label">Ta réponse</span>
+          <span class="confirm-value" id="confirm-answer-text"></span>
+          <span class="confirm-ask">C'est bien ça ?</span>
+          <div class="confirm-actions">
+            <button class="btn-green" id="btn-confirm-yes">Confirmer ✓</button>
+            <button class="btn-ghost" id="btn-confirm-edit">Modifier ✏️</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div id="screen-confirm" class="screen">
-    <div class="confirm-screen">
-      <p class="confirm-label">Ta réponse :</p>
-      <div class="confirm-answer" id="confirm-answer-text"></div>
-      <p class="confirm-question">C'est bien ça ?</p>
-      <div class="confirm-buttons">
-        <button class="btn-confirm-yes" id="btn-confirm-yes">Confirmer ✓</button>
-        <button class="btn-confirm-edit" id="btn-confirm-edit">Modifier ✏️</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- ===== REGISTERED ===== -->
   <div id="screen-registered" class="screen">
-    <div class="result-screen">
-      <div class="emoji">✅</div>
-      <h2 id="motivational-msg">Enregistré !</h2>
-      <div class="personal-counter" id="personal-counter"></div>
-      <button class="btn-next" id="btn-next-ok">Question suivante →</button>
+    <div class="screen-inner" style="max-width:380px">
+      <div class="feedback-emoji anim-celebrate" id="reg-emoji">✅</div>
+      <p class="feedback-msg anim-slideup" id="motivational-msg" style="animation-delay:0.15s">Bien joué !</p>
+      <p class="feedback-counter anim-slideup" id="personal-counter" style="animation-delay:0.25s"></p>
+      <div class="anim-slideup" style="animation-delay:0.35s">
+        <button class="btn-primary" id="btn-next-ok">Question suivante →</button>
+      </div>
     </div>
   </div>
 
+  <!-- ===== TIMEOUT ===== -->
   <div id="screen-timeout" class="screen">
-    <div class="result-screen">
-      <div class="emoji">⏰</div>
-      <h2>Temps écoulé !</h2>
-      <button class="btn-next" id="btn-next-timeout">Question suivante →</button>
+    <div class="screen-inner" style="max-width:380px">
+      <div class="feedback-emoji anim-popin">⏰</div>
+      <p class="feedback-msg anim-slideup" style="animation-delay:0.15s">Temps écoulé !</p>
+      <div class="anim-slideup" style="animation-delay:0.35s">
+        <button class="btn-primary" id="btn-next-timeout">Question suivante →</button>
+      </div>
     </div>
   </div>
 
+  <!-- ===== DONE ===== -->
   <div id="screen-done" class="screen">
-    <div class="done-screen">
-      <div class="emoji">🙌</div>
-      <h1>Merci !</h1>
-      <p id="done-text"></p>
+    <div class="screen-inner" style="max-width:380px">
+      <div class="feedback-emoji anim-celebrate">🙌</div>
+      <p class="feedback-msg anim-slideup" style="animation-delay:0.2s">Merci !</p>
+      <p class="feedback-counter anim-slideup" id="done-text" style="animation-delay:0.3s"></p>
     </div>
   </div>
 
-  <script src="/js/survey.js?v=5"></script>
+  <!-- Confetti container -->
+  <div id="confetti-container"></div>
+
+  <script src="/js/survey.js?v=6"></script>
 </body>
 </html>
