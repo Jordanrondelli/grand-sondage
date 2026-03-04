@@ -226,12 +226,30 @@
     const c = $('club-tabs'); c.innerHTML = '';
     categories.forEach(cat => {
       const club = CLUBS[cat.name] || { emoji: '', color: '#888' };
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:inline-flex;align-items:center;gap:2px';
       const b = document.createElement('button');
       b.className = 'club-tab' + (editorClub === cat.name ? ' active' : '');
       b.textContent = club.emoji + ' ' + cat.name;
       if (editorClub === cat.name) b.style.cssText = 'background:' + club.color + ';border-color:' + club.color;
       b.onclick = () => { editorClub = cat.name; renderEditorTabs(); renderEditor(); };
-      c.appendChild(b);
+      wrap.appendChild(b);
+      if (editorClub === cat.name) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'club-edit-btn';
+        editBtn.textContent = '✏️';
+        editBtn.title = 'Renommer';
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          const newName = prompt('Nouveau nom pour "' + cat.name + '" :', cat.name);
+          if (newName && newName.trim() && newName.trim() !== cat.name) {
+            api('/api/admin/categories/' + cat.id, { method: 'PUT', body: JSON.stringify({ name: newName.trim() }) })
+              .then(() => { editorClub = newName.trim(); loadAll(); });
+          }
+        };
+        wrap.appendChild(editBtn);
+      }
+      c.appendChild(wrap);
     });
     // Set add button color
     const club = CLUBS[editorClub] || { color: '#888' };

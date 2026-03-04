@@ -94,6 +94,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .club-tabs{display:flex;gap:6px;margin-bottom:14px}
 .club-tab{background:transparent;border:1px solid #333;color:var(--text-gray);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s}
 .club-tab.active{color:#fff;border-color:transparent}
+.club-edit-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;opacity:.6;transition:opacity .2s}
+.club-edit-btn:hover{opacity:1}
 .editor-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
 .editor-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-light);padding:6px 0}
 .editor-item .num{color:var(--text-gray);font-family:ui-monospace,monospace;min-width:20px}

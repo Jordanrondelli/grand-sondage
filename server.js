@@ -276,6 +276,15 @@ app.post('/api/admin/categories', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nom requis' });
+    await db.updateCategory(req.params.id, name.trim());
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 app.get('/api/admin/questions', requireAdmin, async (req, res) => {
   try { res.json(await db.getQuestionsWithCounts()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });

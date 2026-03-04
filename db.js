@@ -321,12 +321,16 @@ async function insertCategory(name) {
   }
 }
 
+async function updateCategory(id, name) {
+  await runNoReturn("UPDATE categories SET name = $1 WHERE id = $2", [name, id]);
+}
+
 module.exports = {
   init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
   getAnswersGrouped, getStats, insertQuestion, updateQuestion,
   deleteQuestion, mergeAnswers, getAllAnswersForExport,
-  deleteAllAnswers, insertCategory,
+  deleteAllAnswers, insertCategory, updateCategory,
   getBannedWords, addBannedWord, deleteBannedWord,
   getCorrections, addCorrection, deleteCorrection,
   getSetting, setSetting, getExistingAnswers,
