@@ -19,44 +19,58 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .screen.top-align{justify-content:flex-start;align-items:stretch}
 
 /* Welcome */
-.welcome{text-align:center;max-width:380px;width:100%}
+.welcome{text-align:center;max-width:400px;width:100%}
 .welcome .emoji{font-size:56px;margin-bottom:16px}
-.welcome h1{font-size:28px;font-weight:700;margin-bottom:10px}
-.welcome .desc{font-size:15px;color:#999;line-height:1.5;margin-bottom:28px}
-.rules{display:flex;flex-direction:column;gap:10px;margin-bottom:32px}
-.rule{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-light)}
+.welcome h1{font-size:28px;font-weight:700;margin-bottom:14px}
+.welcome .desc{font-size:14px;color:#999;line-height:1.6;margin-bottom:24px}
+.rules{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;text-align:left}
+.rule{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text-light);line-height:1.4}
 .rule .re{font-size:18px;width:28px;text-align:center;flex-shrink:0}
+.participant-count{font-size:13px;color:var(--text-gray);margin-bottom:20px;min-height:18px}
 .btn-go{background:var(--red);color:#fff;border:none;padding:14px 44px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .2s}
 .btn-go:active{opacity:.8}
 .already{font-size:13px;color:var(--text-dark);margin-top:16px}
 
 /* Question */
 .question-screen{max-width:480px;width:100%;text-align:center}
-.timer-track{width:100%;height:3px;background:var(--border);border-radius:2px;margin-bottom:20px;overflow:hidden}
+.timer-track{width:100%;height:3px;background:var(--border);border-radius:2px;margin-bottom:8px;overflow:hidden}
 .timer-fill{height:100%;border-radius:2px;transition:width 1s linear}
-.timer-fill.green{background:var(--green)}
+.timer-fill.white{background:rgba(255,255,255,.7)}
 .timer-fill.orange{background:var(--orange)}
 .timer-fill.red{background:var(--danger)}
-.timer-num{font-size:32px;font-family:ui-monospace,monospace;font-weight:700;margin-bottom:20px}
-.timer-num.green{color:var(--green)}
-.timer-num.orange{color:var(--orange)}
-.timer-num.red{color:var(--danger)}
+.timer-num-small{font-size:13px;font-family:ui-monospace,monospace;font-weight:500;margin-bottom:24px;color:var(--text-dark)}
+.timer-num-small.white{color:var(--text-dark)}
+.timer-num-small.orange{color:var(--orange)}
+.timer-num-small.red{color:var(--danger)}
 .q-text{font-size:21px;font-weight:700;line-height:1.45;margin-bottom:28px}
-.answer-row{display:flex;gap:10px;margin-bottom:16px}
+.answer-row{display:flex;gap:10px;margin-bottom:10px}
 .answer-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:16px;outline:none;font-family:inherit}
 .answer-input::placeholder{color:var(--text-dark)}
 .answer-input:focus{border-color:rgba(255,255,255,.2)}
 .btn-validate{background:var(--red);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s;white-space:nowrap}
 .btn-validate.dim{opacity:.3;pointer-events:none}
-.hint{font-size:13px;color:rgba(255,255,255,.2)}
-.btn-skip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--text-light);font-size:14px;font-weight:600;cursor:pointer;padding:10px 24px;margin-top:12px;border-radius:10px;font-family:inherit;transition:all .2s}
+.hint{font-size:13px;color:rgba(255,255,255,.25);margin-bottom:4px}
+.hint-definitive{font-size:11px;color:rgba(255,255,255,.15);margin-bottom:14px}
+.btn-skip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--text-light);font-size:14px;font-weight:600;cursor:pointer;padding:10px 24px;margin-top:8px;border-radius:10px;font-family:inherit;transition:all .2s}
 .btn-skip:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2)}
 .fire-count{font-size:12px;color:var(--text-dark);margin-top:12px}
+
+/* Confirmation screen */
+.confirm-screen{text-align:center;max-width:400px;width:100%}
+.confirm-label{font-size:14px;color:var(--text-gray);margin-bottom:16px}
+.confirm-answer{font-size:32px;font-weight:800;text-transform:uppercase;line-height:1.3;margin-bottom:24px;letter-spacing:1px;word-break:break-word}
+.confirm-question{font-size:16px;color:var(--text-light);margin-bottom:24px}
+.confirm-buttons{display:flex;gap:12px;justify-content:center}
+.btn-confirm-yes{background:var(--green);color:#fff;border:none;border-radius:10px;padding:14px 32px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.btn-confirm-yes:active{opacity:.8}
+.btn-confirm-edit{background:#333;color:#fff;border:none;border-radius:10px;padding:14px 32px;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.btn-confirm-edit:active{opacity:.8}
 
 /* Result screens */
 .result-screen{text-align:center;max-width:380px}
 .result-screen .emoji{font-size:52px;margin-bottom:14px}
-.result-screen h2{font-size:20px;font-weight:700;margin-bottom:20px}
+.result-screen h2{font-size:20px;font-weight:700;margin-bottom:12px}
+.personal-counter{font-size:14px;color:var(--text-gray);margin-bottom:20px}
 .btn-next{background:var(--red);color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer}
 .btn-next:active{opacity:.8}
 
@@ -83,7 +97,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .stat-num{font-size:24px;font-family:ui-monospace,monospace;font-weight:700}
 .stat-label{font-size:11px;color:var(--text-gray);margin-top:2px}
 
-.actions-row{display:flex;gap:8px;justify-content:center;margin-bottom:24px}
+.actions-row{display:flex;gap:8px;justify-content:center;margin-bottom:24px;flex-wrap:wrap}
 .btn-action{background:transparent;border:1px solid var(--border);color:var(--text-gray);border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;transition:border-color .2s}
 .btn-action:hover{border-color:#444;color:var(--text-light)}
 
@@ -202,4 +216,5 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .stat-num{font-size:20px}
   .answer-minibar{width:40px}
   .answer-stat{min-width:55px;font-size:10px}
+  .confirm-answer{font-size:26px}
 }

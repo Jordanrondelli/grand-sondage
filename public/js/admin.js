@@ -401,6 +401,8 @@
 
   // Export
   $('btn-export').onclick = () => { window.location.href = '/api/admin/export'; };
+  // Tournage
+  $('btn-tournage').onclick = () => { window.open('/tournage', '_blank'); };
 
   // Reset
   $('btn-reset').onclick = () => { $('confirm-reset').style.display = ''; };

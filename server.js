@@ -217,7 +217,7 @@ app.post('/api/answers', rateLimit, async (req, res) => {
       await db.incrementRejected(question_id);
       return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
     }
-    const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 30) ? Math.round(response_time) : null;
+    const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 45) ? Math.round(response_time) : null;
     if (isGibberish(normalized) || containsBannedWord(normalized)) {
       await db.incrementRejected(question_id);
       return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
@@ -248,6 +248,18 @@ app.post('/api/questions/:id/skip', rateLimit, async (req, res) => {
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
+
+app.get('/api/stats/participants', async (req, res) => {
+  try { res.json({ count: await db.getTotalParticipantCount() }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// --- SSE for shooting mode ---
+const sseClients = new Set();
+function sendSSE(data) {
+  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  for (const res of sseClients) res.write(msg);
+}
 
 // --- Admin Auth ---
 
@@ -499,6 +511,64 @@ app.post('/api/admin/reset', requireAdmin, async (req, res) => {
 });
 
 app.get('/admin', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
+
+// --- Shooting mode (Tournage) ---
+
+app.get('/api/tournage/events', requireAdmin, (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+  res.write('\n');
+  sseClients.add(res);
+  req.on('close', () => sseClients.delete(res));
+});
+
+app.get('/api/tournage/categories', requireAdmin, async (req, res) => {
+  try { res.json(await db.getAllCategories()); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.get('/api/tournage/categories/:id/questions', requireAdmin, async (req, res) => {
+  try { res.json(await db.getQuestionsByCategory(req.params.id)); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.get('/api/tournage/questions/:id/answers', requireAdmin, async (req, res) => {
+  try {
+    const question = await db.getQuestionById(req.params.id);
+    if (!question) return res.status(404).json({ error: 'Introuvable' });
+    const answers = await db.getAnswersWithScores(req.params.id);
+    res.json({ question, answers });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/tournage/show-answer', requireAdmin, (req, res) => {
+  const { answer, score } = req.body;
+  sendSSE({ type: 'show-answer', answer, score });
+  res.json({ ok: true });
+});
+
+app.post('/api/tournage/reveal-score', requireAdmin, (req, res) => {
+  sendSSE({ type: 'reveal-score' });
+  res.json({ ok: true });
+});
+
+app.post('/api/tournage/hors-panel', requireAdmin, (req, res) => {
+  sendSSE({ type: 'hors-panel' });
+  res.json({ ok: true });
+});
+
+app.post('/api/tournage/reset', requireAdmin, (req, res) => {
+  sendSSE({ type: 'reset' });
+  res.json({ ok: true });
+});
+
+app.post('/api/tournage/set-club', requireAdmin, (req, res) => {
+  const { club } = req.body;
+  sendSSE({ type: 'set-club', club });
+  res.json({ ok: true });
+});
+
+app.get('/tournage', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'tournage.html')); });
+app.get('/tournage/display', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'tournage-display.html')); });
 
 db.init().then(() => {
   app.listen(PORT, '0.0.0.0', () => {

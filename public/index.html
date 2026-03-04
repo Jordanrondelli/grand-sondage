@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Le Sondage</title>
-  <link rel="stylesheet" href="/css/style.css?v=3">
+  <link rel="stylesheet" href="/css/style.css?v=5">
 </head>
 <body>
   <nav class="nav">
@@ -16,36 +16,51 @@
     <div class="welcome">
       <div class="emoji">🎤</div>
       <h1>Le Sondage</h1>
-      <p class="desc">On va te poser des questions. À chaque fois, donne une seule réponse, la première qui te vient.</p>
+      <p class="desc">Ce sondage sert à préparer une vidéo YouTube. Tes réponses vont directement influencer le jeu. C'est pour ça qu'il est très important de répondre sérieusement.</p>
       <div class="rules">
-        <div class="rule"><span class="re">⏱️</span><span>30 secondes par question</span></div>
-        <div class="rule"><span class="re">☝️</span><span>Une seule réponse</span></div>
-        <div class="rule"><span class="re">⚡</span><span>Sois spontané</span></div>
+        <div class="rule"><span class="re">☝️</span><span>Une seule réponse par question</span></div>
+        <div class="rule"><span class="re">✍️</span><span>Vérifie l'orthographe avant de valider</span></div>
+        <div class="rule"><span class="re">🚫</span><span>Tout troll, spam ou réponse absurde sera automatiquement supprimé</span></div>
       </div>
-      <button class="btn-go" id="btn-start">C'est parti</button>
+      <div class="participant-count" id="participant-count"></div>
+      <button class="btn-go" id="btn-start">Je suis prêt</button>
       <div class="already" id="already" style="display:none"></div>
     </div>
   </div>
 
   <div id="screen-question" class="screen">
     <div class="question-screen">
-      <div class="timer-track"><div class="timer-fill green" id="timer-fill"></div></div>
-      <div class="timer-num green" id="timer-num">30</div>
+      <div class="timer-track"><div class="timer-fill white" id="timer-fill"></div></div>
+      <div class="timer-num-small" id="timer-num">45</div>
       <div class="q-text" id="q-text"></div>
       <div class="answer-row">
         <input type="text" class="answer-input" id="answer-input" placeholder="Ta réponse..." maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false">
         <button class="btn-validate dim" id="btn-validate">Valider</button>
       </div>
-      <div class="hint">Première réponse qui te vient !</div>
+      <div class="hint">Réponds vite mais bien !</div>
+      <div class="hint-definitive">Ta réponse est définitive, prends le temps de bien l'écrire</div>
       <button class="btn-skip" id="btn-skip">Passer cette question →</button>
       <div class="fire-count" id="fire-count" style="display:none"></div>
+    </div>
+  </div>
+
+  <div id="screen-confirm" class="screen">
+    <div class="confirm-screen">
+      <p class="confirm-label">Ta réponse :</p>
+      <div class="confirm-answer" id="confirm-answer-text"></div>
+      <p class="confirm-question">C'est bien ça ?</p>
+      <div class="confirm-buttons">
+        <button class="btn-confirm-yes" id="btn-confirm-yes">Confirmer ✓</button>
+        <button class="btn-confirm-edit" id="btn-confirm-edit">Modifier ✏️</button>
+      </div>
     </div>
   </div>
 
   <div id="screen-registered" class="screen">
     <div class="result-screen">
       <div class="emoji">✅</div>
-      <h2>Enregistré !</h2>
+      <h2 id="motivational-msg">Enregistré !</h2>
+      <div class="personal-counter" id="personal-counter"></div>
       <button class="btn-next" id="btn-next-ok">Question suivante →</button>
     </div>
   </div>
@@ -66,6 +81,6 @@
     </div>
   </div>
 
-  <script src="/js/survey.js?v=3"></script>
+  <script src="/js/survey.js?v=5"></script>
 </body>
 </html>

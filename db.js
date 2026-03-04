@@ -307,6 +307,33 @@ async function deleteCorrection(id) {
   await runNoReturn("DELETE FROM corrections WHERE id = $1", [id]);
 }
 
+async function getTotalParticipantCount() {
+  const row = await get("SELECT COUNT(*) as c FROM answers");
+  return Number(row.c);
+}
+
+async function getAnswersWithScores(qid) {
+  const rows = await all(
+    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
+    [qid]
+  );
+  const mapped = rows.map(r => ({ ...r, count: Number(r.count) }));
+  const total = mapped.reduce((s, a) => s + a.count, 0);
+  return mapped.map(a => ({
+    text: a.sample_text,
+    normalized: a.normalized,
+    count: a.count,
+    score: total > 0 ? Math.round((a.count / total) * 100) : 0
+  }));
+}
+
+async function getQuestionsByCategory(catId) {
+  return (await all(
+    "SELECT q.id, q.text, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count FROM questions q WHERE q.category_id = $1 AND q.active = 1 ORDER BY q.id",
+    [catId]
+  )).map(r => ({ ...r, answer_count: Number(r.answer_count) }));
+}
+
 async function deleteAllAnswers() {
   await runNoReturn("DELETE FROM answers");
 }
@@ -334,5 +361,6 @@ module.exports = {
   getBannedWords, addBannedWord, deleteBannedWord,
   getCorrections, addCorrection, deleteCorrection,
   getSetting, setSetting, getExistingAnswers,
+  getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
   THRESHOLD,
 };

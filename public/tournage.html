@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournage — Contrôle</title>
+  <link rel="stylesheet" href="/css/style.css?v=5">
+  <link rel="stylesheet" href="/css/tournage.css?v=1">
+</head>
+<body>
+  <div id="screen-login" class="screen active">
+    <div class="login-screen">
+      <div class="emoji">🎬</div>
+      <h2>Mode Tournage</h2>
+      <input type="password" class="login-input" id="login-pw" placeholder="Mot de passe admin">
+      <div class="login-err" id="login-err"></div>
+      <button class="btn-enter" id="btn-login">Accéder</button>
+    </div>
+  </div>
+
+  <div id="screen-control" class="screen" style="display:none">
+    <div class="control-wrap">
+      <div class="control-header">
+        <h1>🎬 Régie</h1>
+        <a href="/tournage/display" target="_blank" class="btn-open-display">📺 Ouvrir l'affichage</a>
+      </div>
+
+      <div class="control-section">
+        <div class="control-label">Club</div>
+        <div class="club-selector" id="club-selector"></div>
+      </div>
+
+      <div class="control-section" id="question-section" style="display:none">
+        <div class="control-label">Question</div>
+        <select class="control-select" id="question-select"><option value="">Choisir une question...</option></select>
+      </div>
+
+      <div class="control-section" id="answers-section" style="display:none">
+        <div class="control-label">Réponses du panel</div>
+        <button class="btn-hors-panel" id="btn-hors-panel">❌ Hors panel</button>
+        <div class="answers-grid" id="answers-grid"></div>
+      </div>
+
+      <div class="control-actions" id="control-actions" style="display:none">
+        <button class="btn-reveal" id="btn-reveal">🎯 Dévoiler le score</button>
+        <button class="btn-reset-display" id="btn-reset-display">🔄 Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/tournage.js?v=1"></script>
+</body>
+</html>

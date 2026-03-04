@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournage — Affichage</title>
+  <link rel="stylesheet" href="/css/tournage.css?v=1">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,sans-serif;color:#fff}
+  </style>
+</head>
+<body>
+  <!-- Login overlay (for separate device) -->
+  <div id="login-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:100;display:flex;align-items:center;justify-content:center">
+    <div style="text-align:center">
+      <div style="font-size:40px;margin-bottom:16px">🎬</div>
+      <h2 style="font-size:18px;margin-bottom:20px;color:#fff">Affichage Tournage</h2>
+      <input type="password" id="display-pw" placeholder="Mot de passe admin" style="width:240px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:16px;outline:none;text-align:center;margin-bottom:12px;display:block">
+      <div id="display-err" style="color:#E94560;font-size:13px;margin-bottom:10px;min-height:18px"></div>
+      <button id="display-login-btn" style="background:#E94560;color:#fff;border:none;border-radius:12px;padding:14px 44px;font-size:16px;font-weight:700;cursor:pointer">Connecter</button>
+    </div>
+  </div>
+
+  <div class="display-container" id="display-container">
+    <!-- Idle state: club name -->
+    <div class="display-club" id="display-club"></div>
+
+    <!-- Answer reveal -->
+    <div class="display-answer" id="display-answer" style="display:none">
+      <div class="display-answer-text" id="display-answer-text"></div>
+    </div>
+
+    <!-- Score reveal -->
+    <div class="display-score" id="display-score" style="display:none">
+      <span class="display-score-num" id="display-score-num"></span>
+      <span class="display-score-unit">/100</span>
+    </div>
+
+    <!-- Hors panel X -->
+    <div class="display-hors-panel" id="display-hors-panel" style="display:none">
+      <div class="display-x">✕</div>
+    </div>
+  </div>
+
+  <script src="/js/tournage-display.js?v=1"></script>
+</body>
+</html>
