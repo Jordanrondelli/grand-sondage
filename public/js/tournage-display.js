@@ -9,10 +9,10 @@
     const res = await fetch('/api/admin/check');
     const data = await res.json();
     if (data.authenticated) {
-      $('login-overlay').style.display = 'none';
+      $('login-overlay').classList.add('hidden');
       connectSSE();
     } else {
-      $('login-overlay').style.display = 'flex';
+      $('login-overlay').classList.remove('hidden');
     }
   }
 
@@ -20,7 +20,7 @@
     const pw = $('display-pw').value;
     const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
     if (res.ok) {
-      $('login-overlay').style.display = 'none';
+      $('login-overlay').classList.add('hidden');
       connectSSE();
     } else {
       $('display-err').textContent = 'Mot de passe incorrect';
