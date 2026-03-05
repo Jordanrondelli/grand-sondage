@@ -199,7 +199,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .merge-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 10px;color:#fff;font-size:13px;outline:none;font-family:inherit}
 .btn-merge{background:var(--red);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer}
 .btn-merge-cancel{background:#333;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer}
-.answer-footer{font-size:11px;color:var(--text-dark);text-align:center}
+.answer-footer{font-size:11px;color:var(--text-dark);text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.btn-export-q{background:#333;color:#fff;border:1px solid #444;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-export-q:hover{background:#444}
 
 /* Reset */
 .btn-reset{background:transparent;border:1px solid #222;color:var(--text-gray);border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;font-family:inherit;display:block;margin:0 auto}

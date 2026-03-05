@@ -176,7 +176,7 @@
     });
     html += '</div>';
     html += '<div class="merge-bar" id="merge-bar-' + id + '"><div class="merge-label" id="merge-label-' + id + '"></div><div class="merge-row"><input class="merge-input" id="merge-input-' + id + '"><button class="btn-merge" id="merge-go-' + id + '">Fusionner</button><button class="btn-merge-cancel" id="merge-cancel-' + id + '">Annuler</button></div></div>';
-    html += '<div class="answer-footer">' + data.answers.length + ' réponses uniques — ' + vCount(data.totalCount) + ' au total — cliquer pour sélectionner et fusionner</div>';
+    html += '<div class="answer-footer"><button class="btn-export-q" id="export-q-' + id + '">Exporter CSV</button> ' + data.answers.length + ' réponses uniques — ' + vCount(data.totalCount) + ' au total — cliquer pour sélectionner et fusionner</div>';
     det.innerHTML = html;
 
     // Click handlers
@@ -224,6 +224,29 @@
       $('merge-bar-' + id).classList.remove('visible');
       $('merge-input-' + id).value = '';
     };
+
+    // Per-question CSV export
+    $('export-q-' + id).onclick = (e) => {
+      e.stopPropagation();
+      window.location.href = '/api/admin/questions/' + id + '/export';
+    };
+
+    // Answer editing: double-click on answer name to rename
+    det.querySelectorAll('.answer-name').forEach(el => {
+      el.title = 'Double-clic pour modifier';
+      el.style.cursor = 'pointer';
+      el.ondblclick = (e) => {
+        e.stopPropagation();
+        const row = el.closest('.answer-row-item');
+        const norm = row.dataset.norm;
+        const current = el.textContent;
+        const newVal = prompt('Corriger cette réponse :', current);
+        if (newVal && newVal.trim() && newVal.trim() !== current) {
+          api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [norm], canonical_text: newVal.trim() }) })
+            .then(() => { loadAll(); expandedId = id; setTimeout(() => { renderCards(); loadDetail(id); }, 200); });
+        }
+      };
+    });
   }
 
   // Editor

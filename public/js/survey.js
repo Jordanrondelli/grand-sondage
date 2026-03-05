@@ -6,7 +6,7 @@
   const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
-  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260;
+  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
 
   const $ = id => document.getElementById(id);
   const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
@@ -292,12 +292,14 @@
         return;
       }
       currentQ = data;
+      currentMaxLen = data.maxLength || 20;
       const hue = CLUB_HUES[data.club] || 260;
       setHue(hue);
       $('q-text').textContent = data.text;
       input.value = '';
       input.disabled = false;
-      input.placeholder = 'Ta réponse...';
+      input.maxLength = currentMaxLen;
+      input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
       $('phase-confirm').style.display = 'none';

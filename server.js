@@ -33,10 +33,11 @@ function normalizeAnswer(text) {
     .replace(/[^a-zà-ÿ0-9\s''\-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  // Strip leading articles
+  // Strip leading articles (repeat to catch chained: "de la mon")
+  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une |mon |ma |mes |ton |ta |tes |son |sa |ses |c'est |je dirais |je dis |j'aime |j'adore )/i, '').trim();
   s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une )/i, '').trim();
-  // Strip trailing laugh expressions
-  s = s.replace(/\s+(lol|mdr|haha|xd|ptdr)$/i, '').trim();
+  // Strip trailing filler
+  s = s.replace(/\s+(lol|mdr|haha|xd|ptdr|bien sur|evidemment|je pense|je crois|perso|personnellement|quoi|en vrai|genre)$/i, '').trim();
   return s;
 }
 
@@ -60,38 +61,48 @@ function applyCorrections(text) {
 function isGibberish(text) {
   const stripped = text.replace(/[\s'''-]/g, '');
   // Too short
-  if (stripped.length < 3) return true;
+  if (stripped.length < 2) return true;
   // Only repeated same character: "aaa", "..."
   if (/^(.)\1+$/.test(stripped)) return true;
-  // No vowel at all — not a real word
-  if (!/[aeiouyàâäéèêëïîôùûüÿœæ]/i.test(stripped)) return true;
+  // No vowel at all — not a real word (but allow numbers like "42")
+  if (!/[aeiouyàâäéèêëïîôùûüÿœæ0-9]/i.test(stripped)) return true;
   // 5+ consonants in a row — keyboard mash
   if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(stripped)) return true;
   // Same consonant 3+ times in a row: "bbb", "kkk"
   if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(stripped)) return true;
-  // Single char dominance >50% (for 5+ chars): "ojojooi" → 'o' is 57%
-  if (stripped.length >= 5) {
+  // Single char dominance >60% (for 6+ chars)
+  if (stripped.length >= 6) {
     const freq = {};
     for (const ch of stripped) freq[ch] = (freq[ch] || 0) + 1;
-    if (Math.max(...Object.values(freq)) / stripped.length > 0.5) return true;
+    if (Math.max(...Object.values(freq)) / stripped.length > 0.6) return true;
   }
-  // Repeating short pattern 3+ times: "ababab", "hahaha"
-  if (/^(.{1,3})\1{2,}/i.test(stripped)) return true;
+  // Repeating short pattern 3+ times: "ababab"
+  if (/^(.{1,3})\1{2,}$/i.test(stripped)) return true;
   // Same vowel 3+ times in a row: "ooooj", "aaaa"
   if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(stripped)) return true;
-  // Long string with very few unique chars — keyboard spam: "ohoijhjhoijoi"
-  if (stripped.length > 8 && new Set(stripped.toLowerCase()).size <= stripped.length / 3) return true;
+  // Long string with very few unique chars — keyboard spam
+  if (stripped.length > 10 && new Set(stripped.toLowerCase()).size <= stripped.length / 3) return true;
   return false;
 }
 
 // --- Fuzzy Answer Matching ---
 
 function deepNormalize(text) {
-  return text
+  let s = text
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '')
-    .replace(/(.)\1+/g, '$1');
+    .replace(/[^a-z0-9]/g, '');
+  // Common phonetic substitutions for French
+  s = s.replace(/ph/g, 'f')
+    .replace(/qu/g, 'k')
+    .replace(/ck/g, 'k')
+    .replace(/ss/g, 's')
+    .replace(/eau/g, 'o')
+    .replace(/au/g, 'o')
+    .replace(/ou/g, 'u');
+  // Collapse repeated chars
+  s = s.replace(/(.)\1+/g, '$1');
+  return s;
 }
 
 function levenshtein(a, b) {
@@ -119,23 +130,31 @@ function areSimilar(a, b) {
   const maxLen = Math.max(na.length, nb.length);
   if (maxLen === 0) return true;
   const dist = levenshtein(na, nb);
-  const threshold = maxLen <= 5 ? 1 : Math.floor(maxLen * 0.3);
+  // More aggressive: 40% tolerance for clustering
+  const threshold = maxLen <= 4 ? 1 : Math.ceil(maxLen * 0.4);
   return dist <= threshold;
 }
 
-// Find matching existing answer (>80% similarity) — returns existing text or null
+// Find matching existing answer — returns existing text or null
+// Uses phonetic normalization + Levenshtein with 35% tolerance
 function findMatchingAnswer(newText, existingAnswers) {
   const newNorm = deepNormalize(newText);
-  for (const { text } of existingAnswers) {
+  let bestMatch = null, bestDist = Infinity;
+  for (const { text, count } of existingAnswers) {
     const existNorm = deepNormalize(text);
     if (newNorm === existNorm) return text;
     if (newNorm.startsWith(existNorm) || existNorm.startsWith(newNorm)) return text;
     const maxLen = Math.max(newNorm.length, existNorm.length);
     if (maxLen === 0) continue;
     const dist = levenshtein(newNorm, existNorm);
-    if (dist / maxLen <= 0.2) return text; // 80% similar
+    const ratio = dist / maxLen;
+    // 35% tolerance — aggressive merge for short answers
+    if (ratio <= 0.35 && dist < bestDist) {
+      bestDist = dist;
+      bestMatch = text;
+    }
   }
-  return null;
+  return bestMatch;
 }
 
 // Cluster answers for CSV export (more permissive — 70% similarity)
@@ -199,12 +218,16 @@ function requireAdmin(req, res, next) {
 
 // --- Public API ---
 
+// Questions that allow longer answers (maxlength exception)
+const LONG_ANSWER_PATTERNS = ['réplique de film'];
+
 app.get('/api/questions/next', async (req, res) => {
   try {
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
     const q = await db.getAvailableQuestion(ex);
     if (!q) return res.json({ done: true });
-    res.json({ id: q.id, text: q.text, club: q.club });
+    const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
+    res.json({ id: q.id, text: q.text, club: q.club, maxLength: isLong ? 80 : 20 });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
@@ -215,10 +238,16 @@ app.post('/api/answers', rateLimit, async (req, res) => {
       return res.status(400).json({ error: 'Invalide' });
 
     await refreshCache();
+
+    // Determine max length for this question
+    const question = await db.getQuestionById(question_id);
+    const isLong = question && LONG_ANSWER_PATTERNS.some(p => question.text.toLowerCase().includes(p));
+    const maxLen = isLong ? 80 : 20;
+
     let normalized = normalizeAnswer(text);
-    if (!normalized || normalized.length < 2 || normalized.length > 50) {
+    if (!normalized || normalized.length < 2 || normalized.length > maxLen) {
       await db.incrementRejected(question_id);
-      return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
+      return res.status(400).json({ error: normalized && normalized.length > maxLen ? 'Réponse trop longue (max ' + maxLen + ' caractères)' : 'Donne une vraie réponse 😉', troll: true });
     }
     const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 45) ? Math.round(response_time) : null;
     if (isGibberish(normalized) || containsBannedWord(normalized)) {
@@ -507,6 +536,49 @@ app.get('/api/admin/export', requireAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="clubs_secrets_resultats.csv"');
+    res.send(csv);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.get('/api/admin/questions/:id/export', requireAdmin, async (req, res) => {
+  try {
+    const question = await db.getQuestionById(req.params.id);
+    if (!question) return res.status(404).json({ error: 'Introuvable' });
+    const rawAnswers = await db.getAnswersGrouped(req.params.id);
+
+    // Cluster similar answers
+    const clustered = [];
+    for (const item of rawAnswers) {
+      let merged = false;
+      for (const cluster of clustered) {
+        if (areSimilar(item.normalized, cluster.normalized)) {
+          cluster.count += item.count;
+          if (item.count > cluster.maxCount) {
+            cluster.normalized = item.normalized;
+            cluster.sample_text = item.sample_text;
+            cluster.maxCount = item.count;
+          }
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        clustered.push({ normalized: item.normalized, sample_text: item.sample_text, count: item.count, maxCount: item.count });
+      }
+    }
+    clustered.sort((a, b) => b.count - a.count);
+    const total = clustered.reduce((s, a) => s + a.count, 0);
+
+    const e = s => '"' + String(s).replace(/"/g, '""') + '"';
+    let csv = '\uFEFFrang,réponse,count,pourcentage\n';
+    clustered.forEach((a, i) => {
+      const p = total > 0 ? ((a.count / total) * 100).toFixed(1) : '0.0';
+      csv += `${i + 1},${e(a.sample_text)},${a.count},${p}%\n`;
+    });
+
+    const safeName = question.text.replace(/[^a-zA-Zà-ÿ0-9 ]/g, '').substring(0, 40).trim().replace(/\s+/g, '_');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Q${req.params.id}_${safeName}.csv"`);
     res.send(csv);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
