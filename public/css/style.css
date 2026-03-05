@@ -147,6 +147,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .toggle-btn.on{background:var(--green)}
 .toggle-btn.off{background:#444}
 
+/* Search */
+.search-wrap{margin-bottom:16px}
+.search-input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none;font-family:inherit}
+.search-input::placeholder{color:var(--text-dark)}
+.search-input:focus{border-color:rgba(255,255,255,.2)}
+
 /* Filter pills */
 .filter-pills{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
 .pill{background:transparent;border:1px solid #222;color:var(--text-dark);border-radius:20px;padding:5px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s}
@@ -161,6 +167,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .club-label{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-gray);text-transform:uppercase;letter-spacing:1px}
 .club-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .q-card-text{font-size:13px;color:var(--text-light);line-height:1.4;overflow:hidden;text-overflow:ellipsis}
+.q-num{color:var(--text-gray);font-family:ui-monospace,monospace;font-size:12px}
 .q-card-meta{font-size:11px;color:var(--text-gray);margin-top:3px;font-family:ui-monospace,monospace}
 .q-card-count{font-size:18px;font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap;margin-left:12px}
 
@@ -185,6 +192,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .answer-cb.checked{background:var(--red);border-color:var(--red)}
 .answer-rank{font-size:11px;font-family:ui-monospace,monospace;color:var(--text-gray);min-width:18px}
 .answer-name{font-size:12px;color:var(--text-light);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.answer-edit-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;opacity:.4;transition:opacity .15s;flex-shrink:0}
+.answer-edit-btn:hover{opacity:1}
 .answer-minibar{width:60px;height:2px;background:var(--border);border-radius:1px;overflow:hidden;flex-shrink:0}
 .answer-minibar-fill{height:100%;border-radius:1px}
 .answer-minibar-fill.bar-trap{background:var(--danger)}

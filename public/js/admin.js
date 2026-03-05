@@ -8,7 +8,7 @@
 
   const $ = id => document.getElementById(id);
   let categories = [], questions = [], bannedWords = [], corrections = [];
-  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false;
+  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false, searchQuery = '';
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
   function vCount(n) { return videoMode ? Math.round(n / 10) : n; }
@@ -57,6 +57,12 @@
     } catch (e) { if (e.message !== 'unauth') console.error('loadAll error:', e); }
   }
 
+  // Search
+  $('search-input').addEventListener('input', function() {
+    searchQuery = this.value.toLowerCase().trim();
+    renderCards();
+  });
+
   // Stats
   let lastStats = null;
   function renderStats(s) {
@@ -92,8 +98,9 @@
   // Cards
   function renderCards() {
     const c = $('q-cards'); c.innerHTML = '';
-    const filtered = activeFilter ? questions.filter(q => q.category_name === activeFilter) : questions;
-    filtered.forEach(q => {
+    let filtered = activeFilter ? questions.filter(q => q.category_name === activeFilter) : questions;
+    if (searchQuery) filtered = filtered.filter(q => q.text.toLowerCase().includes(searchQuery));
+    filtered.forEach((q, idx) => {
       const club = CLUBS[q.category_name] || { emoji: '', color: '#888' };
       const card = document.createElement('div');
       card.className = 'q-card' + (expandedId === q.id ? ' open' : '');
@@ -106,11 +113,12 @@
       const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
       const rejLabel = q.rejected_count > 0 ? ' · 🚫 ' + q.rejected_count + ' rejetée' + (q.rejected_count > 1 ? 's' : '') : '';
       const variantLabel = q.variant_group ? ' · 🔗 variante ' + q.variant_group : '';
+      const qNum = idx + 1;
       card.innerHTML =
         '<div class="q-card-header" data-qid="' + q.id + '">' +
           '<div class="q-card-left">' +
             '<div class="club-label"><span class="club-dot" style="background:' + club.color + '"></span>' + esc(q.category_name) + '</div>' +
-            '<div class="q-card-text">' + esc(q.text) + '</div>' +
+            '<div class="q-card-text"><span class="q-num">' + qNum + '.</span> ' + esc(q.text) + '</div>' +
             '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + rejLabel + variantLabel + '</div>' +
           '</div>' +
           '<div class="q-card-count" style="color:' + countColor + '">' + displayCount + '<span style="color:#555;font-size:13px">/' + displayMax + '</span></div>' +
@@ -171,6 +179,7 @@
         '<div class="answer-cb" data-norm="' + esc(a.normalized) + '"></div>' +
         '<span class="answer-rank">' + (i + 1) + '</span>' +
         '<span class="answer-name">' + esc(a.sample_text) + '</span>' +
+        '<button class="answer-edit-btn" title="Modifier">✏️</button>' +
         '<div class="answer-minibar"><div class="answer-minibar-fill ' + barClass + '" style="width:' + Math.min(a.percentage, 100) + '%"></div></div>' +
         '<span class="answer-stat">' + displayC + ' (' + a.percentage.toFixed(1) + '%)</span></div>';
     });
@@ -231,15 +240,14 @@
       window.location.href = '/api/admin/questions/' + id + '/export';
     };
 
-    // Answer editing: double-click on answer name to rename
-    det.querySelectorAll('.answer-name').forEach(el => {
-      el.title = 'Double-clic pour modifier';
-      el.style.cursor = 'pointer';
-      el.ondblclick = (e) => {
+    // Answer editing: click edit button to rename
+    det.querySelectorAll('.answer-edit-btn').forEach(btn => {
+      btn.onclick = (e) => {
         e.stopPropagation();
-        const row = el.closest('.answer-row-item');
+        const row = btn.closest('.answer-row-item');
         const norm = row.dataset.norm;
-        const current = el.textContent;
+        const nameEl = row.querySelector('.answer-name');
+        const current = nameEl.textContent;
         const newVal = prompt('Corriger cette réponse :', current);
         if (newVal && newVal.trim() && newVal.trim() !== current) {
           api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [norm], canonical_text: newVal.trim() }) })

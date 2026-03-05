@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tournage — Contrôle</title>
-  <link rel="stylesheet" href="/css/style.css?v=5">
-  <link rel="stylesheet" href="/css/tournage.css?v=1">
+  <link rel="stylesheet" href="/css/style.css?v=6">
+  <link rel="stylesheet" href="/css/tournage.css?v=2">
 </head>
 <body>
   <div id="screen-login" class="screen active">
@@ -36,8 +36,18 @@
       </div>
 
       <div class="control-section" id="answers-section" style="display:none">
-        <div class="control-label">Réponses du panel</div>
-        <button class="btn-hors-panel" id="btn-hors-panel">❌ Hors panel</button>
+        <div class="control-label">Réponse personnalisée</div>
+        <div class="custom-answer-row">
+          <input class="custom-answer-input" id="custom-answer-input" placeholder="Écrire une réponse...">
+          <button class="btn-custom-send" id="btn-custom-send">📺 Afficher</button>
+        </div>
+
+        <div class="control-actions" id="custom-actions" style="display:none">
+          <button class="btn-reveal" id="btn-custom-reveal">🎯 Dévoiler le score</button>
+          <button class="btn-hors-panel" id="btn-hors-panel" style="flex:1">❌ Hors panel</button>
+        </div>
+
+        <div class="control-label" style="margin-top:16px">Réponses du panel</div>
         <div class="answers-grid" id="answers-grid"></div>
       </div>
 
@@ -48,6 +58,6 @@
     </div>
   </div>
 
-  <script src="/js/tournage.js?v=2"></script>
+  <script src="/js/tournage.js?v=3"></script>
 </body>
 </html>

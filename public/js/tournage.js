@@ -117,14 +117,42 @@
     // Highlight
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
     event.currentTarget.classList.add('selected');
+    $('custom-answer-input').value = a.text;
     await api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: a.text, score: a.score }) });
+    $('custom-actions').style.display = '';
     $('control-actions').style.display = '';
   }
+
+  // Custom answer input
+  $('btn-custom-send').onclick = async () => {
+    const text = $('custom-answer-input').value.trim();
+    if (!text) return;
+    // Find matching score from panel
+    const match = currentAnswers.find(a => a.text.toLowerCase() === text.toLowerCase());
+    const score = match ? match.score : null;
+    selectedAnswer = { text, score };
+    document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
+    await api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: text, score: score }) });
+    $('custom-actions').style.display = '';
+    $('control-actions').style.display = '';
+  };
+
+  $('custom-answer-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-custom-send').click(); });
+
+  $('btn-custom-reveal').onclick = async () => {
+    if (selectedAnswer && selectedAnswer.score != null) {
+      await api('/api/tournage/reveal-score', { method: 'POST', body: JSON.stringify({}) });
+    } else {
+      // No score found - trigger hors panel
+      await api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
+    }
+  };
 
   $('btn-hors-panel').onclick = async () => {
     selectedAnswer = null;
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
     await api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
+    $('custom-actions').style.display = '';
     $('control-actions').style.display = '';
   };
 
@@ -134,8 +162,10 @@
 
   $('btn-reset-display').onclick = async () => {
     selectedAnswer = null;
+    $('custom-answer-input').value = '';
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
     await api('/api/tournage/reset', { method: 'POST', body: JSON.stringify({}) });
+    $('custom-actions').style.display = 'none';
     $('control-actions').style.display = 'none';
   };
 
