@@ -7,7 +7,7 @@
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
-  let countdownTimer = null, countdownLeft = 20;
+  let countdownTimer = null, countdownLeft = 15;
 
   const $ = id => document.getElementById(id);
   const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
@@ -168,7 +168,7 @@
   }
 
   function startCountdown() {
-    countdownLeft = 20;
+    countdownLeft = 15;
     updateCheckboxes();
     countdownTimer = setInterval(() => {
       countdownLeft--;
