@@ -106,6 +106,10 @@ async function init() {
     await run("INSERT INTO categories (name) VALUES ($1)", ['La situation']);
   }
 
+  // Fix: these two questions were incorrectly in variant_group 2
+  await runNoReturn("UPDATE questions SET variant_group = NULL WHERE variant_group = 2 AND text = $1", ["Cite un fruit de mer"]);
+  await runNoReturn("UPDATE questions SET variant_group = NULL WHERE variant_group = 2 AND text = $1", ["Qu'est ce qu'on mange et qui vient de la mer ?"]);
+
   // Seed questions (idempotent — skips duplicates)
   // Format: [categoryName, variantGroup (null if no variants), text]
   const cats = await all("SELECT * FROM categories");
@@ -116,8 +120,8 @@ async function init() {
     // --- Le Glouton Club ---
     [catMap['Le Glouton Club'], 1, "Une variété de pâtes ?"],
     [catMap['Le Glouton Club'], 1, "Un plat de pâtes ?"],
-    [catMap['Le Glouton Club'], 2, "Cite un fruit de mer"],
-    [catMap['Le Glouton Club'], 2, "Qu'est ce qu'on mange et qui vient de la mer ?"],
+    [catMap['Le Glouton Club'], null, "Cite un fruit de mer"],
+    [catMap['Le Glouton Club'], null, "Qu'est ce qu'on mange et qui vient de la mer ?"],
     [catMap['Le Glouton Club'], 3, "Qu'est ce qui t'énerve le plus au restaurant ?"],
     [catMap['Le Glouton Club'], 3, "Qu'est ce qui peut te décevoir au restaurant ?"],
     [catMap['Le Glouton Club'], 3, "Quelle situation peut te faire quitter un restaurant ?"],
