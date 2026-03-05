@@ -7,6 +7,7 @@
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
+  let countdownTimer = null, countdownLeft = 20;
 
   const $ = id => document.getElementById(id);
   const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
@@ -152,7 +153,28 @@
       card.querySelector('.checkbox').textContent = checks[i] ? '✓' : '';
     });
     const allChecked = checks.every(Boolean);
-    $('btn-start').classList.toggle('disabled', !allChecked);
+    const canStart = allChecked && countdownLeft <= 0;
+    $('btn-start').classList.toggle('disabled', !canStart);
+    if (allChecked && countdownLeft > 0) {
+      $('btn-start-text').textContent = 'Patiente encore...';
+      $('btn-countdown').textContent = '(' + countdownLeft + 's)';
+    } else if (allChecked) {
+      $('btn-start-text').textContent = "C'est parti";
+      $('btn-countdown').textContent = '';
+    } else {
+      $('btn-start-text').textContent = 'Lis bien les règles...';
+      $('btn-countdown').textContent = countdownLeft > 0 ? '(' + countdownLeft + 's)' : '';
+    }
+  }
+
+  function startCountdown() {
+    countdownLeft = 20;
+    updateCheckboxes();
+    countdownTimer = setInterval(() => {
+      countdownLeft--;
+      if (countdownLeft <= 0) { clearInterval(countdownTimer); countdownTimer = null; countdownLeft = 0; }
+      updateCheckboxes();
+    }, 1000);
   }
 
   document.querySelectorAll('.check-card').forEach(card => {
@@ -244,12 +266,59 @@
   }
 
   // ============================================================
+  // CLIENT-SIDE GIBBERISH CHECK
+  // ============================================================
+  function looksLikeGibberish(text) {
+    const s = text.replace(/[\s'''-]/g, '');
+    if (s.length < 2) return true;
+    if (/^(.)\1+$/.test(s)) return true;
+    if (!/[aeiouyàâäéèêëïîôùûüÿœæ0-9]/i.test(s)) return true;
+    if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(s)) return true;
+    if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(s)) return true;
+    if (s.length >= 6) {
+      const freq = {};
+      for (const ch of s) freq[ch] = (freq[ch] || 0) + 1;
+      if (Math.max(...Object.values(freq)) / s.length > 0.6) return true;
+    }
+    if (/^(.{1,3})\1{2,}$/i.test(s)) return true;
+    if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(s)) return true;
+    return false;
+  }
+
+  function shakeInput() {
+    const group = $('input-group');
+    const inp = $('answer-input');
+    group.classList.remove('shake');
+    void group.offsetWidth;
+    group.classList.add('shake');
+    inp.classList.add('blocked');
+    inp.disabled = true;
+    setTimeout(() => {
+      inp.classList.remove('blocked');
+      inp.disabled = false;
+      inp.focus();
+    }, 800);
+  }
+
+  // ============================================================
   // INPUT
   // ============================================================
   const input = $('answer-input');
   const btnVal = $('btn-validate');
   input.addEventListener('input', () => {
-    btnVal.classList.toggle('disabled', !input.value.trim());
+    const val = input.value;
+    // Hard block if over maxLength (extra safety)
+    if (val.length > currentMaxLen) {
+      input.value = val.slice(0, currentMaxLen);
+      shakeInput();
+      return;
+    }
+    // Check gibberish on 3+ chars
+    if (val.trim().length >= 3 && looksLikeGibberish(val.trim())) {
+      shakeInput();
+      return;
+    }
+    btnVal.classList.toggle('disabled', !val.trim());
   });
 
   // ============================================================
@@ -300,6 +369,7 @@
       input.disabled = false;
       input.maxLength = currentMaxLen;
       input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
+      $('input-reminder').textContent = currentMaxLen + ' caractères maximum, réponds sérieusement';
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
       $('phase-confirm').style.display = 'none';
@@ -315,6 +385,7 @@
   function showConfirmation() {
     const val = input.value.trim();
     if (!val || !currentQ) return;
+    if (looksLikeGibberish(val)) { shakeInput(); return; }
     pendingAnswer = val;
     stopTimer();
     setPulse(0);
@@ -392,7 +463,7 @@
   // EVENTS
   // ============================================================
   $('btn-start').addEventListener('click', () => {
-    if (checks.every(Boolean)) { updateAlready(); loadNext(); }
+    if (checks.every(Boolean) && countdownLeft <= 0) { updateAlready(); loadNext(); }
   });
   $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });
@@ -408,6 +479,6 @@
   initBackground();
   initLogo();
   updateAlready();
-  updateCheckboxes();
+  startCountdown();
   loadParticipantCount();
 })();

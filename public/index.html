@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/survey.css?v=3">
+  <link rel="stylesheet" href="/css/survey.css?v=4">
 </head>
 <body>
   <!-- Animated background (managed by JS) -->
@@ -30,11 +30,13 @@
             Ces questions vont me permettre de préparer une <strong style="color:#fff">vidéo YouTube</strong>. Tes réponses sont importantes, réponds sérieusement !
           </p>
         </div>
-        <div class="warning-box">
-          <div class="warning-icon">&#9888;&#65039;</div>
-          <p class="warning-text">
-            <strong>IMPORTANT :</strong> Réponds sérieusement, soigne ton orthographe et ne rajoute pas de mots superflus.<br>
-            Les réponses troll, spam ou mal écrites seront <strong>automatiquement supprimées</strong> et remplacées par quelqu'un qui aura joué le jeu.
+        <div class="warning-box-big">
+          <div class="warning-icon-big">&#9888;&#65039;</div>
+          <div class="warning-title-big">ATTENTION</div>
+          <p class="warning-text-big">
+            Chaque r&eacute;ponse compte pour la vid&eacute;o.<br>
+            <strong>R&eacute;ponds s&eacute;rieusement</strong>, soigne ton <strong>orthographe</strong> et <strong>ne rajoute pas de mots superflus</strong>.<br><br>
+            Toute r&eacute;ponse troll, spam ou mal &eacute;crite sera <strong>automatiquement supprim&eacute;e</strong> et remplac&eacute;e par celle de quelqu'un qui aura jou&eacute; le jeu s&eacute;rieusement.
           </p>
         </div>
       </div>
@@ -62,7 +64,7 @@
           <span class="live-dot"></span>
           <span id="participant-text"></span>
         </div>
-        <button class="btn-primary disabled" id="btn-start">C'est parti</button>
+        <button class="btn-primary disabled" id="btn-start"><span id="btn-start-text">Lis bien les r&egrave;gles...</span><span id="btn-countdown" class="btn-countdown"></span></button>
         <div class="already-text" id="already" style="display:none"></div>
       </div>
     </div>
@@ -94,7 +96,8 @@
 
       <!-- Input phase -->
       <div id="phase-input" class="anim-fadein">
-        <div class="input-group">
+        <p class="input-reminder" id="input-reminder">20 caract&egrave;res maximum, r&eacute;ponds s&eacute;rieusement</p>
+        <div class="input-group" id="input-group">
           <input type="text" class="answer-input" id="answer-input" placeholder="Ta réponse..." maxlength="60" autocomplete="off" autocorrect="off" spellcheck="false">
           <button class="btn-send disabled" id="btn-validate">→</button>
         </div>
@@ -152,6 +155,6 @@
   <!-- Confetti container -->
   <div id="confetti-container"></div>
 
-  <script src="/js/survey.js?v=8"></script>
+  <script src="/js/survey.js?v=9"></script>
 </body>
 </html>

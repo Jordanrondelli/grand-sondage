@@ -34,10 +34,12 @@ body{
 .welcome-title{font-size:36px;font-weight:900;color:#fff;margin-bottom:24px;letter-spacing:-0.5px}
 .intro-box{background:rgba(255,255,255,0.05);border-radius:20px;padding:22px 24px;border:1px solid rgba(255,255,255,0.08);margin-bottom:0}
 .intro-text{font-size:17px;line-height:1.7;color:rgba(255,255,255,0.7);font-weight:700;text-align:center}
-.warning-box{background:rgba(255,80,80,0.08);border:2px solid rgba(255,80,80,0.35);border-radius:16px;padding:16px 18px;margin-top:16px;display:flex;align-items:flex-start;gap:12px;text-align:left}
-.warning-icon{font-size:28px;flex-shrink:0;line-height:1}
-.warning-text{font-size:13px;line-height:1.6;color:rgba(255,255,255,0.7);font-weight:600}
-.warning-text strong{color:#FF6B6B}
+.warning-box-big{background:rgba(255,50,50,0.1);border:2px solid rgba(255,60,60,0.5);border-radius:20px;padding:22px 22px 20px;margin-top:18px;text-align:center;animation:warningPulse 3s ease-in-out infinite}
+.warning-icon-big{font-size:42px;margin-bottom:6px}
+.warning-title-big{font-size:20px;font-weight:900;color:#FF5555;letter-spacing:2px;margin-bottom:8px;text-transform:uppercase}
+.warning-text-big{font-size:14px;line-height:1.7;color:rgba(255,255,255,0.75);font-weight:600}
+.warning-text-big strong{color:#FF6B6B}
+@keyframes warningPulse{0%,100%{border-color:rgba(255,60,60,0.5);box-shadow:0 0 0 rgba(255,60,60,0)}50%{border-color:rgba(255,60,60,0.8);box-shadow:0 0 20px rgba(255,60,60,0.15)}}
 .rules-checks{display:flex;flex-direction:column;gap:10px;margin:24px 0}
 .check-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;border:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:all 0.25s ease;text-align:left;user-select:none;background:rgba(255,255,255,0.03)}
 .check-card.checked{border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.06)}
@@ -55,6 +57,7 @@ body{
 .btn-primary:hover{transform:translateY(-2px)}
 .btn-primary:active{transform:scale(0.97)!important}
 .btn-primary.disabled{opacity:0.35;cursor:not-allowed;transform:none!important}
+.btn-countdown{font-size:13px;font-weight:700;opacity:0.7;margin-left:6px}
 .btn-send{width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;background:linear-gradient(135deg,#FF6B8A 0%,#FF8E72 100%);border:none;border-radius:14px;box-shadow:0 4px 15px rgba(255,107,138,0.25);cursor:pointer;font-family:'Nunito',sans-serif;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);flex-shrink:0}
 .btn-send:hover{transform:translateY(-2px)}
 .btn-send:active{transform:scale(0.97)!important}
@@ -86,7 +89,11 @@ body{
 .answer-input{flex:1;padding:16px 18px;font-size:16px;font-weight:600;font-family:'Nunito',sans-serif;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.07);border-radius:14px;color:#fff;transition:border-color 0.25s ease;outline:none}
 .answer-input::placeholder{color:rgba(255,255,255,0.2)}
 .answer-input:focus{border-color:rgba(255,255,255,0.25)}
+.input-reminder{font-size:13px;font-weight:700;color:rgba(255,180,100,0.7);margin-bottom:10px;letter-spacing:0.3px}
 .input-hint{font-size:12px;font-weight:600;color:rgba(255,255,255,0.18)}
+.input-group.shake{animation:inputShake 0.5s ease}
+.answer-input.blocked{border-color:rgba(255,60,60,0.6)!important;background:rgba(255,40,40,0.08)!important}
+@keyframes inputShake{0%,100%{transform:translateX(0)}10%{transform:translateX(-8px)}20%{transform:translateX(8px)}30%{transform:translateX(-6px)}40%{transform:translateX(6px)}50%{transform:translateX(-4px)}60%{transform:translateX(4px)}70%{transform:translateX(-2px)}80%{transform:translateX(2px)}}
 
 /* ===== CONFIRM ===== */
 .confirm-box{background:rgba(255,255,255,0.04);border-radius:24px;padding:28px 24px;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;align-items:center;gap:4px}
