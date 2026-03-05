@@ -227,7 +227,7 @@ app.get('/api/questions/next', async (req, res) => {
     const q = await db.getAvailableQuestion(ex);
     if (!q) return res.json({ done: true });
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
-    res.json({ id: q.id, text: q.text, club: q.club, maxLength: isLong ? 80 : 20 });
+    res.json({ id: q.id, text: q.text, club: q.club, maxLength: isLong ? 200 : 40 });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
@@ -242,7 +242,7 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     // Determine max length for this question
     const question = await db.getQuestionById(question_id);
     const isLong = question && LONG_ANSWER_PATTERNS.some(p => question.text.toLowerCase().includes(p));
-    const maxLen = isLong ? 80 : 20;
+    const maxLen = isLong ? 200 : 40;
 
     let normalized = normalizeAnswer(text);
     if (!normalized || normalized.length < 2 || normalized.length > maxLen) {

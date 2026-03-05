@@ -6,7 +6,7 @@
   const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
-  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
+  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
   let countdownTimer = null, countdownLeft = 15;
 
   const $ = id => document.getElementById(id);
@@ -308,7 +308,7 @@
   input.addEventListener('input', () => {
     const val = input.value;
     // Hard block if over maxLength (extra safety)
-    if (val.length > currentMaxLen) {
+    if (currentMaxLen < 200 && val.length > currentMaxLen) {
       input.value = val.slice(0, currentMaxLen);
       shakeInput();
       return;
@@ -325,9 +325,14 @@
   function updateCharCount() {
     var rem = $('input-reminder');
     if (!rem) return;
-    var left = currentMaxLen - input.value.length;
-    rem.textContent = left + ' / ' + currentMaxLen + ' caractères';
-    rem.style.color = left <= 3 ? 'rgba(255,80,80,0.9)' : left <= 8 ? 'rgba(255,180,100,0.8)' : 'rgba(255,180,100,0.5)';
+    if (currentMaxLen >= 200) {
+      rem.textContent = input.value.length + ' caractères';
+      rem.style.color = 'rgba(255,180,100,0.5)';
+    } else {
+      var left = currentMaxLen - input.value.length;
+      rem.textContent = left + ' / ' + currentMaxLen + ' caractères';
+      rem.style.color = left <= 3 ? 'rgba(255,80,80,0.9)' : left <= 8 ? 'rgba(255,180,100,0.8)' : 'rgba(255,180,100,0.5)';
+    }
   }
 
   // ============================================================
@@ -370,14 +375,19 @@
         return;
       }
       currentQ = data;
-      currentMaxLen = data.maxLength || 20;
+      currentMaxLen = data.maxLength || 40;
       const hue = CLUB_HUES[data.club] || 260;
       setHue(hue);
       $('q-text').textContent = data.text;
       input.value = '';
       input.disabled = false;
-      input.maxLength = currentMaxLen;
-      input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
+      if (currentMaxLen >= 200) {
+        input.removeAttribute('maxLength');
+        input.placeholder = 'Ta réponse...';
+      } else {
+        input.maxLength = currentMaxLen;
+        input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
+      }
       updateCharCount();
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
