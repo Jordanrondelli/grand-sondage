@@ -154,16 +154,16 @@
     });
     const allChecked = checks.every(Boolean);
     const canStart = allChecked && countdownLeft <= 0;
-    $('btn-start').classList.toggle('disabled', !canStart);
+    const btn = $('btn-start');
+    btn.classList.toggle('disabled', !canStart);
     if (allChecked && countdownLeft > 0) {
-      $('btn-start-text').textContent = 'Patiente encore...';
-      $('btn-countdown').textContent = '(' + countdownLeft + 's)';
+      btn.textContent = 'Patiente encore... (' + countdownLeft + 's)';
     } else if (allChecked) {
-      $('btn-start-text').textContent = "C'est parti";
-      $('btn-countdown').textContent = '';
+      btn.textContent = "C'est parti";
+    } else if (countdownLeft > 0) {
+      btn.textContent = 'Lis bien les règles... (' + countdownLeft + 's)';
     } else {
-      $('btn-start-text').textContent = 'Lis bien les règles...';
-      $('btn-countdown').textContent = countdownLeft > 0 ? '(' + countdownLeft + 's)' : '';
+      btn.textContent = 'Coche les règles ci-dessus';
     }
   }
 
@@ -369,7 +369,7 @@
       input.disabled = false;
       input.maxLength = currentMaxLen;
       input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
-      $('input-reminder').textContent = currentMaxLen + ' caractères maximum, réponds sérieusement';
+      var rem = $('input-reminder'); if (rem) rem.textContent = currentMaxLen + ' caractères maximum, réponds sérieusement';
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
       $('phase-confirm').style.display = 'none';
