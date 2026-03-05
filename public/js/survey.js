@@ -319,7 +319,16 @@
       return;
     }
     btnVal.classList.toggle('disabled', !val.trim());
+    updateCharCount();
   });
+
+  function updateCharCount() {
+    var rem = $('input-reminder');
+    if (!rem) return;
+    var left = currentMaxLen - input.value.length;
+    rem.textContent = left + ' / ' + currentMaxLen + ' caractères';
+    rem.style.color = left <= 3 ? 'rgba(255,80,80,0.9)' : left <= 8 ? 'rgba(255,180,100,0.8)' : 'rgba(255,180,100,0.5)';
+  }
 
   // ============================================================
   // WELCOME
@@ -369,7 +378,7 @@
       input.disabled = false;
       input.maxLength = currentMaxLen;
       input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
-      var rem = $('input-reminder'); if (rem) rem.textContent = currentMaxLen + ' caractères maximum, réponds sérieusement';
+      updateCharCount();
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
       $('phase-confirm').style.display = 'none';
