@@ -1,8 +1,9 @@
 (function () {
   const CLUBS = {
-    'vacances':    { emoji: '🏖️', color: '#E94560' },
-    'nourriture':  { emoji: '🍔', color: '#F5A623' },
-    'cinéma':      { emoji: '🎬', color: '#7B68EE' },
+    'Le Glouton Club': { emoji: '🍔', color: '#F5A623' },
+    'Metronomus':      { emoji: '🎵', color: '#7B68EE' },
+    'Red carpet':      { emoji: '🎬', color: '#E94560' },
+    'La situation':    { emoji: '💬', color: '#22C55E' },
   };
 
   const $ = id => document.getElementById(id);
@@ -104,12 +105,13 @@
       const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
       const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
       const rejLabel = q.rejected_count > 0 ? ' · 🚫 ' + q.rejected_count + ' rejetée' + (q.rejected_count > 1 ? 's' : '') : '';
+      const variantLabel = q.variant_group ? ' · 🔗 variante ' + q.variant_group : '';
       card.innerHTML =
         '<div class="q-card-header" data-qid="' + q.id + '">' +
           '<div class="q-card-left">' +
             '<div class="club-label"><span class="club-dot" style="background:' + club.color + '"></span>' + esc(q.category_name) + '</div>' +
             '<div class="q-card-text">' + esc(q.text) + '</div>' +
-            '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + rejLabel + '</div>' +
+            '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + rejLabel + variantLabel + '</div>' +
           '</div>' +
           '<div class="q-card-count" style="color:' + countColor + '">' + displayCount + '<span style="color:#555;font-size:13px">/' + displayMax + '</span></div>' +
         '</div>' +

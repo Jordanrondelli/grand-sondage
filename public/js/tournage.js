@@ -1,9 +1,10 @@
 (function () {
   const $ = id => document.getElementById(id);
   const CLUBS = {
-    'vacances': { emoji: '🏖️', color: '#E94560' },
-    'nourriture': { emoji: '🍔', color: '#F5A623' },
-    'cinéma': { emoji: '🎬', color: '#7B68EE' }
+    'Le Glouton Club': { emoji: '🍔', color: '#F5A623' },
+    'Metronomus': { emoji: '🎵', color: '#7B68EE' },
+    'Red carpet': { emoji: '🎬', color: '#E94560' },
+    'La situation': { emoji: '💬', color: '#22C55E' }
   };
 
   let categories = [];

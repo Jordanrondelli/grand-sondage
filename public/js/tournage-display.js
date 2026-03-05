@@ -56,9 +56,10 @@
       case 'set-club':
         resetDisplay();
         const CLUBS = {
-          'vacances': '🏖️ Vacances',
-          'nourriture': '🍔 Nourriture',
-          'cinéma': '🎬 Cinéma'
+          'Le Glouton Club': '🍔 Le Glouton Club',
+          'Metronomus': '🎵 Metronomus',
+          'Red carpet': '🎬 Red carpet',
+          'La situation': '💬 La situation'
         };
         $('display-club').textContent = CLUBS[data.club] || data.club;
         $('display-club').style.display = '';

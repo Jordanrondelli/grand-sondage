@@ -63,7 +63,7 @@ async function init() {
   if (isPostgres) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS categories (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE);
-      CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, active INTEGER DEFAULT 1, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, variant_group INTEGER DEFAULT NULL);
       CREATE TABLE IF NOT EXISTS answers (id SERIAL PRIMARY KEY, question_id INTEGER NOT NULL REFERENCES questions(id), text TEXT NOT NULL, response_time INTEGER, created_at TIMESTAMP DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_answers_question ON answers(question_id);
       CREATE TABLE IF NOT EXISTS banned_words (id SERIAL PRIMARY KEY, word TEXT NOT NULL UNIQUE);
@@ -73,6 +73,7 @@ async function init() {
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS skip_count INTEGER DEFAULT 0").catch(() => {});
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rejected_count INTEGER DEFAULT 0").catch(() => {});
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS response_time INTEGER").catch(() => {});
+    await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS variant_group INTEGER DEFAULT NULL").catch(() => {});
   } else {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
@@ -86,10 +87,11 @@ async function init() {
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN skip_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN rejected_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN response_time INTEGER"); } catch {}
+    try { sqlite.exec("ALTER TABLE questions ADD COLUMN variant_group INTEGER DEFAULT NULL"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
-  const oldCat = await get("SELECT id FROM categories WHERE name = $1", ['années 2000']);
+  const oldCat = await get("SELECT id FROM categories WHERE name = $1", ['vacances']);
   if (oldCat) {
     await runNoReturn("DELETE FROM answers");
     await runNoReturn("DELETE FROM questions");
@@ -98,34 +100,106 @@ async function init() {
 
   const row = await get('SELECT COUNT(*) as c FROM categories');
   if (Number(row.c) === 0) {
-    await run("INSERT INTO categories (name) VALUES ($1)", ['vacances']);
-    await run("INSERT INTO categories (name) VALUES ($1)", ['nourriture']);
-    await run("INSERT INTO categories (name) VALUES ($1)", ['cinéma']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['Le Glouton Club']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['Metronomus']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['Red carpet']);
+    await run("INSERT INTO categories (name) VALUES ($1)", ['La situation']);
   }
 
   // Seed questions (idempotent — skips duplicates)
+  // Format: [categoryName, variantGroup (null if no variants), text]
   const cats = await all("SELECT * FROM categories");
   const catMap = {};
   cats.forEach(c => { catMap[c.name] = c.id; });
 
   const seedQuestions = [
-    [catMap['vacances'], "Tu es au bar en vacances, qu'est-ce que tu commandes ?"],
-    [catMap['vacances'], "Quel est LE pays où tu rêves d'aller ?"],
-    [catMap['vacances'], "Quel est LE truc que tu oublies toujours dans ta valise ?"],
-    [catMap['vacances'], "Quel est LE truc le plus énervant en avion ?"],
-    [catMap['nourriture'], "Quel est L'aliment que tu manges en cachette dans le frigo ?"],
-    [catMap['nourriture'], "Qu'est ce que tu commandes en livraison quand t'as la flemme de faire a manger ?"],
-    [catMap['nourriture'], "Quel est LE truc que tu grignotes devant la télé ?"],
-    [catMap['cinéma'], "Quel est LE méchant de film que tout le monde connaît ?"],
-    [catMap['cinéma'], "Quel est ton genre de film préféré ? (horreur, comédie, science fiction, etc...)"],
-    [catMap['cinéma'], "Quel est LE Disney que tu préfères ?"],
+    // --- Le Glouton Club ---
+    [catMap['Le Glouton Club'], 1, "Une variété de pâtes ?"],
+    [catMap['Le Glouton Club'], 1, "Un plat de pâtes ?"],
+    [catMap['Le Glouton Club'], 2, "Cite un fruit de mer"],
+    [catMap['Le Glouton Club'], 2, "Qu'est ce qu'on mange et qui vient de la mer ?"],
+    [catMap['Le Glouton Club'], 3, "Qu'est ce qui t'énerve le plus au restaurant ?"],
+    [catMap['Le Glouton Club'], 3, "Qu'est ce qui peut te décevoir au restaurant ?"],
+    [catMap['Le Glouton Club'], 3, "Quelle situation peut te faire quitter un restaurant ?"],
+    [catMap['Le Glouton Club'], 3, "Qu'est ce qui peut te faire mettre 1 étoile à un restaurant ?"],
+    [catMap['Le Glouton Club'], null, "Avec qui préfères-tu aller au restaurant ?"],
+    [catMap['Le Glouton Club'], null, "Un ustensile de cuisine ?"],
+    [catMap['Le Glouton Club'], null, "Quelle est ta cuisine du monde préférée ? (pays d'origine)"],
+    [catMap['Le Glouton Club'], null, "Quel animal serais-tu curieux de goûter ?"],
+    [catMap['Le Glouton Club'], null, "Cite un aliment que tu détestes."],
+    [catMap['Le Glouton Club'], null, "Quelle est la première chose que tu manges le matin ?"],
+    [catMap['Le Glouton Club'], 4, "Il est minuit, tu as une petite faim, tu ouvres ton frigo, qu'est ce que tu prends instinctivement ?"],
+    [catMap['Le Glouton Club'], 4, "Il est minuit, tu as une petite faim, tu ne veux pas te faire à manger, qu'est ce que tu grignotes ?"],
+    [catMap['Le Glouton Club'], null, "Une sauce que tu aimes."],
+    [catMap['Le Glouton Club'], 5, "Un aliment impossible à manger de manière sexy ?"],
+    [catMap['Le Glouton Club'], 5, "Quelque chose que tu ne mangeras jamais pendant un date ?"],
+    [catMap['Le Glouton Club'], null, "Quel aliment te fais penser à une haleine de poney ?"],
+    [catMap['Le Glouton Club'], null, "Un aliment ou un plat qui te réconforte ?"],
+    [catMap['Le Glouton Club'], null, "Jusqu'à combien de jours après la date de péremption vous pouvez manger un yaourt ?"],
+    [catMap['Le Glouton Club'], null, "La pire chose à trouver dans son assiette au restaurant ?"],
+    [catMap['Le Glouton Club'], null, "Quel plat te fais regretter de l'avoir manger ?"],
+    [catMap['Le Glouton Club'], null, "Quel aliment ne devrait pas se trouver sur une pizza ?"],
+    [catMap['Le Glouton Club'], null, "Qu'est ce qui se mange en apéritif ?"],
+    [catMap['Le Glouton Club'], null, "Qu'est-ce qui se grille au barbecue l'été ?"],
+    [catMap['Le Glouton Club'], null, "Tu dois demander l'addition au restaurant, que fais-tu ?"],
+    [catMap['Le Glouton Club'], null, "Une spécialité culinaire française ? (plats principaux salés)"],
+    // --- Metronomus ---
+    [catMap['Metronomus'], null, "Un instrument de musique ?"],
+    [catMap['Metronomus'], null, "Un genre de musique ?"],
+    [catMap['Metronomus'], 6, "Quelle musique tu mets pour ambiancer tout le monde en soirée ? (titre et artiste)"],
+    [catMap['Metronomus'], 6, "La soirée bat son plein, tu passes la prochaine musique, qu'est-ce que tu mets ?"],
+    [catMap['Metronomus'], 6, "La soirée bat son plein, tu dois passer la prochaine musique, quel artiste va plaire à tout le monde ?"],
+    [catMap['Metronomus'], null, "Une musique intemporelle ?"],
+    [catMap['Metronomus'], null, "Tu t'occupes de la musique d'un enterrement, qu'est ce que tu mets pour l'arrivée du cercueil ?"],
+    [catMap['Metronomus'], null, "Le plus grand artiste de tous les temps ?"],
+    [catMap['Metronomus'], null, "Le meilleur endroit pour écouter ta musique ?"],
+    [catMap['Metronomus'], 7, "Un objet pour mimer un micro ?"],
+    [catMap['Metronomus'], 7, "Un instrument facile à mimer ?"],
+    [catMap['Metronomus'], null, "Meilleure chanson à chanter au karaoké ?"],
+    [catMap['Metronomus'], null, "L'artiste musical que vous mettez en fond pour baiser ?"],
+    [catMap['Metronomus'], null, "La musique la plus ringarde ?"],
+    [catMap['Metronomus'], null, "La meilleure comptine de tous les temps ?"],
+    [catMap['Metronomus'], null, "Quel Disney a la meilleure musique ?"],
+    [catMap['Metronomus'], null, "Un artiste musical cancel ?"],
+    [catMap['Metronomus'], null, "De quel artiste musical détestes-tu les musiques ?"],
+    [catMap['Metronomus'], null, "Quelqu'un te fait écouter sa musique c'est pas dingue, qu'est ce que tu lui dis pour pas lui faire de la peine ?"],
+    [catMap['Metronomus'], null, "Quel youtubeur a fait la pire musique ?"],
+    [catMap['Metronomus'], 8, "Une danse ?"],
+    [catMap['Metronomus'], 8, "Un type de danse ?"],
+    [catMap['Metronomus'], null, "Une note de musique ?"],
+    // --- Red carpet ---
+    [catMap['Red carpet'], null, "Un genre de film ?"],
+    [catMap['Red carpet'], null, "Qu'est ce que tu prends au cinéma ? (sauf le popcorn)"],
+    [catMap['Red carpet'], null, "Un méchant de film ?"],
+    [catMap['Red carpet'], null, "Donne l'acteur ou l'actrice que tu trouves le plus beau/belle"],
+    [catMap['Red carpet'], null, "Un chien populaire de films, séries ou dessins animés ?"],
+    [catMap['Red carpet'], null, "Un film qui fait pleurer ?"],
+    [catMap['Red carpet'], 9, "Un objet culte du cinéma ?"],
+    [catMap['Red carpet'], 9, "Un objet de film que tu aimerais avoir dans la vraie vie ?"],
+    [catMap['Red carpet'], null, "Un film français ?"],
+    [catMap['Red carpet'], null, "Qu'est ce qui peut t'énerver quand tu regardes un film avec quelqu'un ?"],
+    [catMap['Red carpet'], null, "Quel youtubeur serait le meilleur acteur ?"],
+    [catMap['Red carpet'], null, "Qu'est ce que tu dirais pour te faire passer pour un cinéphile ?"],
+    [catMap['Red carpet'], null, "Une série (dessin animé ou réel) dont tu connais le générique par coeur ?"],
+    [catMap['Red carpet'], null, "Une réplique de film ?"],
+    [catMap['Red carpet'], 10, "L'émotion la plus dure à jouer ?"],
+    [catMap['Red carpet'], 10, "Une émotion qu'un acteur ou une actrice peut jouer ?"],
+    // --- La situation ---
+    [catMap['La situation'], 11, "C'est quoi le plus important dans la vie ?"],
+    [catMap['La situation'], 11, "Qu'est ce qui te rend heureux dans la vie ?"],
+    [catMap['La situation'], null, "Une insulte ? (courte)"],
+    [catMap['La situation'], null, "Une drogue ou une addiction ? (légale ou illégale)"],
   ];
 
-  for (const [catId, text] of seedQuestions) {
+  for (const [catId, variantGroup, text] of seedQuestions) {
     if (!catId) continue;
     const exists = await get("SELECT id FROM questions WHERE text = $1", [text]);
     if (!exists) {
-      await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
+      if (variantGroup !== null) {
+        await run("INSERT INTO questions (category_id, text, variant_group) VALUES ($1, $2, $3)", [catId, text, variantGroup]);
+      } else {
+        await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
+      }
     }
   }
 
@@ -158,16 +232,31 @@ async function init() {
 const THRESHOLD = 1000;
 
 async function getAvailableQuestion(excludeIds) {
+  // Also exclude questions that share a variant_group with any already-answered question
   if (isPostgres) {
     const rows = await all(
-      "SELECT q.id, q.text, c.name as club FROM questions q JOIN categories c ON c.id = q.category_id WHERE q.active = 1 AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < $1 AND NOT (q.id = ANY($2::int[])) ORDER BY RANDOM() LIMIT 1",
+      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q JOIN categories c ON c.id = q.category_id
+       WHERE q.active = 1
+         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < $1
+         AND NOT (q.id = ANY($2::int[]))
+         AND (q.variant_group IS NULL OR q.variant_group NOT IN (
+           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($2::int[])
+         ))
+       ORDER BY RANDOM() LIMIT 1`,
       [THRESHOLD, excludeIds]
     );
     return rows[0] || null;
   } else {
     return sqlite.prepare(
-      "SELECT q.id, q.text, c.name as club FROM questions q JOIN categories c ON c.id = q.category_id WHERE q.active = 1 AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < ? AND q.id NOT IN (SELECT value FROM json_each(?)) ORDER BY RANDOM() LIMIT 1"
-    ).get(THRESHOLD, JSON.stringify(excludeIds)) || null;
+      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q JOIN categories c ON c.id = q.category_id
+       WHERE q.active = 1
+         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < ?
+         AND q.id NOT IN (SELECT value FROM json_each(?))
+         AND (q.variant_group IS NULL OR q.variant_group NOT IN (
+           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
+         ))
+       ORDER BY RANDOM() LIMIT 1`
+    ).get(THRESHOLD, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null;
   }
 }
 
@@ -189,9 +278,9 @@ async function getAllCategories() {
 
 async function getQuestionsWithCounts() {
   const rows = await all(
-    "SELECT q.id, q.text, q.active, q.category_id, q.skip_count, q.rejected_count, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count, (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.response_time IS NOT NULL) as avg_time FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
+    "SELECT q.id, q.text, q.active, q.category_id, q.skip_count, q.rejected_count, q.variant_group, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count, (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.response_time IS NOT NULL) as avg_time FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
   );
-  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), rejected_count: Number(r.rejected_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
+  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), rejected_count: Number(r.rejected_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null, variant_group: r.variant_group || null }));
 }
 
 async function getQuestionById(id) {
@@ -215,7 +304,10 @@ async function getStats() {
   return { totalAnswers, completeQuestions, totalQuestions, threshold: THRESHOLD };
 }
 
-async function insertQuestion(catId, text) {
+async function insertQuestion(catId, text, variantGroup) {
+  if (variantGroup) {
+    return run("INSERT INTO questions (category_id, text, variant_group) VALUES ($1, $2, $3)", [catId, text, variantGroup]);
+  }
   return run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
 }
 

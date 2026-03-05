@@ -2,7 +2,7 @@
   const DURATION = 45;
   const CIRCUMFERENCE = 2 * Math.PI * 46; // radius=46
   const ENCOURAGING = ['Bien joué !', 'Merci !', 'Continue !', 'Une de plus !', 'Tu gères !', 'Parfait !', 'Top !', 'Excellent !'];
-  const CLUB_HUES = { vacances: 340, nourriture: 30, glouton: 30, 'cinéma': 260, 'ciné': 260 };
+  const CLUB_HUES = { 'Le Glouton Club': 30, 'Metronomus': 280, 'Red carpet': 340, 'La situation': 180 };
   const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
@@ -396,6 +396,7 @@
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });
   $('btn-confirm-yes').addEventListener('click', confirmSubmit);
   $('btn-confirm-edit').addEventListener('click', editAnswer);
+  $('btn-skip').addEventListener('click', skip);
   $('btn-next-ok').addEventListener('click', loadNext);
   $('btn-next-timeout').addEventListener('click', skip);
 
