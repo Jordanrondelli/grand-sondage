@@ -8,8 +8,14 @@
   };
 
   let categories = [];
+  let currentCatId = null;
+  let currentTqId = null;
   let currentAnswers = [];
   let selectedAnswer = null;
+  let pendingCsv = null;
+  let pendingReplaceTqId = null;
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
   async function api(url, opts) {
     const res = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts?.headers || {}) } });
@@ -42,132 +48,200 @@
     renderClubs();
   }
 
+  // --- Clubs ---
   function renderClubs() {
-    const container = $('club-selector');
-    container.innerHTML = '';
+    const c = $('club-selector');
+    c.innerHTML = '';
     categories.forEach(cat => {
       const club = CLUBS[cat.name] || { emoji: '📋', color: '#888' };
       const btn = document.createElement('button');
-      btn.className = 'club-btn';
-      btn.style.borderColor = club.color;
-      btn.innerHTML = '<span class="club-btn-emoji">' + club.emoji + '</span><span>' + cat.name + '</span>';
+      btn.className = 'club-btn' + (currentCatId === cat.id ? ' active' : '');
+      if (currentCatId === cat.id) btn.style.borderColor = club.color;
+      btn.innerHTML = '<span class="club-btn-emoji">' + club.emoji + '</span><span>' + esc(cat.name) + '</span>';
       btn.onclick = () => selectClub(cat);
-      container.appendChild(btn);
+      c.appendChild(btn);
     });
   }
 
   async function selectClub(cat) {
-    const club = CLUBS[cat.name] || { emoji: '📋', color: '#888' };
-    // Highlight selected
-    document.querySelectorAll('.club-btn').forEach(b => b.classList.remove('active'));
-    event.currentTarget.classList.add('active');
-
-    // Send club name to display
+    currentCatId = cat.id;
+    currentTqId = null;
+    renderClubs();
     await api('/api/tournage/set-club', { method: 'POST', body: JSON.stringify({ club: cat.name }) });
-
-    // Load questions
-    const res = await api('/api/tournage/categories/' + cat.id + '/questions');
-    const questions = await res.json();
-    const sel = $('question-select');
-    sel.innerHTML = '<option value="">Choisir une question...</option>';
-    questions.forEach(q => {
-      const opt = document.createElement('option');
-      opt.value = q.id;
-      opt.textContent = q.text + ' (' + q.answer_count + ' rép.)';
-      sel.appendChild(opt);
-    });
-    $('question-section').style.display = '';
-    $('answers-section').style.display = 'none';
-    $('control-actions').style.display = 'none';
+    await loadQuestions();
+    $('questions-section').style.display = '';
+    $('answer-section').style.display = 'none';
   }
 
-  $('question-select').onchange = async function () {
-    const qid = this.value;
-    if (!qid) { $('answers-section').style.display = 'none'; return; }
-    const res = await api('/api/tournage/questions/' + qid + '/answers');
+  // --- Questions list ---
+  async function loadQuestions() {
+    const res = await api('/api/tournage/categories/' + currentCatId + '/questions');
+    const questions = await res.json();
+    renderQuestionList(questions);
+  }
+
+  function renderQuestionList(questions) {
+    const list = $('tq-list');
+    list.innerHTML = '';
+    if (questions.length === 0) {
+      list.innerHTML = '<div class="tq-empty">Aucune question importée. Importez un CSV.</div>';
+      return;
+    }
+    questions.forEach((q, i) => {
+      const item = document.createElement('div');
+      item.className = 'tq-item' + (currentTqId === q.id ? ' active' : '');
+      item.innerHTML =
+        '<span class="tq-num">' + (i + 1) + '</span>' +
+        '<span class="tq-text">' + esc(q.text) + '</span>' +
+        '<span class="tq-count">' + q.answer_count + ' rép.</span>' +
+        '<button class="tq-reimport" title="Réimporter CSV">🔄</button>' +
+        '<button class="tq-delete" title="Supprimer">🗑️</button>';
+      item.querySelector('.tq-text').onclick = () => selectQuestion(q.id);
+      item.querySelector('.tq-num').onclick = () => selectQuestion(q.id);
+      item.querySelector('.tq-reimport').onclick = (e) => { e.stopPropagation(); startReimport(q.id); };
+      item.querySelector('.tq-delete').onclick = (e) => { e.stopPropagation(); deleteQuestion(q.id, q.text); };
+      list.appendChild(item);
+    });
+  }
+
+  async function selectQuestion(tqId) {
+    currentTqId = tqId;
+    const res = await api('/api/tournage/questions/' + tqId);
     const data = await res.json();
     currentAnswers = data.answers;
-    renderAnswers();
-    $('answers-section').style.display = '';
-    $('control-actions').style.display = 'none';
+    $('selected-q-label').textContent = data.question.text;
+    $('custom-answer-input').value = '';
     selectedAnswer = null;
-  };
+    $('action-buttons').style.display = 'none';
+    renderAnswerGrid();
+    $('answer-section').style.display = '';
+    await loadQuestions(); // refresh active state
+  }
 
-  function renderAnswers() {
+  function renderAnswerGrid() {
     const grid = $('answers-grid');
     grid.innerHTML = '';
     currentAnswers.forEach((a, i) => {
+      const scoreColor = a.percentage <= 5 ? '#4ADE80' : a.percentage <= 15 ? '#FBBF24' : '#F87171';
       const btn = document.createElement('button');
       btn.className = 'answer-btn';
-      const scoreColor = a.score <= 5 ? '#22C55E' : a.score <= 15 ? '#F59E0B' : '#E94560';
-      btn.innerHTML = '<span class="answer-btn-rank">#' + (i + 1) + '</span>' +
-        '<span class="answer-btn-text">' + escHTML(a.text) + '</span>' +
-        '<span class="answer-btn-score" style="color:' + scoreColor + '">' + a.score + '</span>';
-      btn.onclick = () => triggerAnswer(a);
+      btn.innerHTML =
+        '<span class="answer-btn-rank">#' + (i + 1) + '</span>' +
+        '<span class="answer-btn-text">' + esc(a.text) + '</span>' +
+        '<span class="answer-btn-score" style="color:' + scoreColor + '">' + a.count + '</span>';
+      btn.onclick = () => triggerPanelAnswer(a, btn);
       grid.appendChild(btn);
     });
   }
 
-  function escHTML(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  async function triggerAnswer(a) {
-    selectedAnswer = a;
-    // Highlight
+  // --- Trigger answer from panel click ---
+  function triggerPanelAnswer(a, btnEl) {
+    selectedAnswer = { text: a.text, score: a.count };
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
-    event.currentTarget.classList.add('selected');
+    btnEl.classList.add('selected');
     $('custom-answer-input').value = a.text;
-    await api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: a.text, score: a.score }) });
-    $('custom-actions').style.display = '';
-    $('control-actions').style.display = '';
+    api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: a.text, score: a.count }) });
+    $('action-buttons').style.display = '';
   }
 
-  // Custom answer input
-  $('btn-custom-send').onclick = async () => {
+  // --- Custom answer input ---
+  $('btn-show-answer').onclick = () => {
     const text = $('custom-answer-input').value.trim();
     if (!text) return;
-    // Find matching score from panel
+    // Search in panel (case insensitive)
     const match = currentAnswers.find(a => a.text.toLowerCase() === text.toLowerCase());
-    const score = match ? match.score : null;
-    selectedAnswer = { text, score };
+    selectedAnswer = match ? { text: match.text, score: match.count } : { text, score: null };
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
-    await api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: text, score: score }) });
-    $('custom-actions').style.display = '';
-    $('control-actions').style.display = '';
+    // Highlight matching panel item
+    if (match) {
+      const idx = currentAnswers.indexOf(match);
+      const btns = document.querySelectorAll('.answer-btn');
+      if (btns[idx]) btns[idx].classList.add('selected');
+    }
+    api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: text, score: selectedAnswer.score }) });
+    $('action-buttons').style.display = '';
   };
 
-  $('custom-answer-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-custom-send').click(); });
+  $('custom-answer-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-show-answer').click(); });
 
-  $('btn-custom-reveal').onclick = async () => {
+  // --- Reveal / Hors panel / Reset ---
+  $('btn-reveal-score').onclick = () => {
     if (selectedAnswer && selectedAnswer.score != null) {
-      await api('/api/tournage/reveal-score', { method: 'POST', body: JSON.stringify({}) });
+      api('/api/tournage/reveal-score', { method: 'POST', body: JSON.stringify({}) });
     } else {
-      // No score found - trigger hors panel
-      await api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
+      api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
     }
   };
 
-  $('btn-hors-panel').onclick = async () => {
-    selectedAnswer = null;
-    document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
-    await api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
-    $('custom-actions').style.display = '';
-    $('control-actions').style.display = '';
+  $('btn-hors-panel').onclick = () => {
+    api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
   };
 
-  $('btn-reveal').onclick = async () => {
-    await api('/api/tournage/reveal-score', { method: 'POST', body: JSON.stringify({}) });
-  };
-
-  $('btn-reset-display').onclick = async () => {
+  $('btn-reset-display').onclick = () => {
     selectedAnswer = null;
     $('custom-answer-input').value = '';
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
-    await api('/api/tournage/reset', { method: 'POST', body: JSON.stringify({}) });
-    $('custom-actions').style.display = 'none';
-    $('control-actions').style.display = 'none';
+    api('/api/tournage/reset', { method: 'POST', body: JSON.stringify({}) });
+    $('action-buttons').style.display = 'none';
   };
+
+  // --- CSV Import ---
+  $('btn-import-csv').onclick = () => {
+    pendingReplaceTqId = null;
+    $('csv-file-input').click();
+  };
+
+  function startReimport(tqId) {
+    pendingReplaceTqId = tqId;
+    $('csv-file-input').click();
+  }
+
+  $('csv-file-input').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      pendingCsv = ev.target.result;
+      $('modal-info').textContent = 'Fichier : ' + file.name + ' (' + Math.round(file.size / 1024) + ' Ko)';
+      $('import-modal').style.display = '';
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  };
+
+  $('btn-import-asis').onclick = () => doImport(false);
+  $('btn-import-rescale').onclick = () => doImport(true);
+  $('btn-import-cancel').onclick = () => { $('import-modal').style.display = 'none'; pendingCsv = null; };
+
+  async function doImport(rescale) {
+    $('import-modal').style.display = 'none';
+    if (!pendingCsv || !currentCatId) return;
+    const body = { csv: pendingCsv, category_id: currentCatId, rescale };
+    if (pendingReplaceTqId) {
+      if (!confirm('Cela va écraser les réponses existantes. Continuer ?')) return;
+      body.replace_tq_id = pendingReplaceTqId;
+    }
+    const res = await api('/api/tournage/import', { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.ok) {
+      await loadQuestions();
+      if (data.tq_id) await selectQuestion(data.tq_id);
+    } else {
+      alert('Erreur: ' + (data.error || 'Import échoué'));
+    }
+    pendingCsv = null;
+    pendingReplaceTqId = null;
+  }
+
+  async function deleteQuestion(tqId, text) {
+    if (!confirm('Supprimer "' + text + '" ?')) return;
+    await api('/api/tournage/questions/' + tqId, { method: 'DELETE' });
+    if (currentTqId === tqId) {
+      currentTqId = null;
+      $('answer-section').style.display = 'none';
+    }
+    await loadQuestions();
+  }
 
   checkAuth();
 })();

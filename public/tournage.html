@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tournage — Contrôle</title>
+  <title>Tournage — Régie</title>
   <link rel="stylesheet" href="/css/style.css?v=6">
-  <link rel="stylesheet" href="/css/tournage.css?v=2">
+  <link rel="stylesheet" href="/css/tournage.css?v=3">
 </head>
 <body>
   <div id="screen-login" class="screen active">
@@ -25,39 +25,54 @@
         <a href="/tournage/display" target="_blank" class="btn-open-display">📺 Ouvrir l'affichage</a>
       </div>
 
+      <!-- Categories -->
       <div class="control-section">
         <div class="control-label">Club</div>
         <div class="club-selector" id="club-selector"></div>
       </div>
 
-      <div class="control-section" id="question-section" style="display:none">
-        <div class="control-label">Question</div>
-        <select class="control-select" id="question-select"><option value="">Choisir une question...</option></select>
+      <!-- Questions list for selected category -->
+      <div class="control-section" id="questions-section" style="display:none">
+        <div class="control-label">Questions importées</div>
+        <div class="tq-list" id="tq-list"></div>
+        <button class="btn-import" id="btn-import-csv">📥 Importer une question (CSV)</button>
+        <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none">
       </div>
 
-      <div class="control-section" id="answers-section" style="display:none">
-        <div class="control-label">Réponse personnalisée</div>
+      <!-- Selected question: answer input + panel -->
+      <div class="control-section" id="answer-section" style="display:none">
+        <div class="control-label" id="selected-q-label">Réponse</div>
+
         <div class="custom-answer-row">
-          <input class="custom-answer-input" id="custom-answer-input" placeholder="Écrire une réponse...">
-          <button class="btn-custom-send" id="btn-custom-send">📺 Afficher</button>
+          <input class="custom-answer-input" id="custom-answer-input" placeholder="Écrire la réponse du joueur...">
+          <button class="btn-custom-send" id="btn-show-answer">📺 Afficher</button>
         </div>
 
-        <div class="control-actions" id="custom-actions" style="display:none">
-          <button class="btn-reveal" id="btn-custom-reveal">🎯 Dévoiler le score</button>
-          <button class="btn-hors-panel" id="btn-hors-panel" style="flex:1">❌ Hors panel</button>
+        <div class="action-buttons" id="action-buttons" style="display:none">
+          <button class="btn-reveal" id="btn-reveal-score">🎯 Dévoiler le score</button>
+          <button class="btn-hors-panel" id="btn-hors-panel">❌ Hors panel</button>
+          <button class="btn-reset-display" id="btn-reset-display">🔄 Reset</button>
         </div>
 
-        <div class="control-label" style="margin-top:16px">Réponses du panel</div>
+        <div class="control-label" style="margin-top:20px">Réponses du panel</div>
         <div class="answers-grid" id="answers-grid"></div>
-      </div>
-
-      <div class="control-actions" id="control-actions" style="display:none">
-        <button class="btn-reveal" id="btn-reveal">🎯 Dévoiler le score</button>
-        <button class="btn-reset-display" id="btn-reset-display">🔄 Reset</button>
       </div>
     </div>
   </div>
 
-  <script src="/js/tournage.js?v=3"></script>
+  <!-- Import modal -->
+  <div class="modal-overlay" id="import-modal" style="display:none">
+    <div class="modal-box">
+      <h3>Importer le CSV</h3>
+      <p class="modal-info" id="modal-info"></p>
+      <div class="modal-actions">
+        <button class="btn-modal" id="btn-import-asis">Importer tel quel</button>
+        <button class="btn-modal btn-modal-alt" id="btn-import-rescale">Ramener sur 100</button>
+        <button class="btn-modal btn-modal-cancel" id="btn-import-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/tournage.js?v=4"></script>
 </body>
 </html>

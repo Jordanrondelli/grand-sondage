@@ -69,6 +69,8 @@ async function init() {
       CREATE TABLE IF NOT EXISTS banned_words (id SERIAL PRIMARY KEY, word TEXT NOT NULL UNIQUE);
       CREATE TABLE IF NOT EXISTS corrections (id SERIAL PRIMARY KEY, wrong TEXT NOT NULL UNIQUE, correct TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS tournage_questions (id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL REFERENCES categories(id), text TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS tournage_answers (id SERIAL PRIMARY KEY, tq_id INTEGER NOT NULL REFERENCES tournage_questions(id) ON DELETE CASCADE, text TEXT NOT NULL, count INTEGER DEFAULT 0, percentage REAL DEFAULT 0);
     `);
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS skip_count INTEGER DEFAULT 0").catch(() => {});
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rejected_count INTEGER DEFAULT 0").catch(() => {});
@@ -83,6 +85,8 @@ async function init() {
       CREATE TABLE IF NOT EXISTS banned_words (id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE);
       CREATE TABLE IF NOT EXISTS corrections (id INTEGER PRIMARY KEY AUTOINCREMENT, wrong TEXT NOT NULL UNIQUE, correct TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS tournage_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER NOT NULL, text TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (category_id) REFERENCES categories(id));
+      CREATE TABLE IF NOT EXISTS tournage_answers (id INTEGER PRIMARY KEY AUTOINCREMENT, tq_id INTEGER NOT NULL, text TEXT NOT NULL, count INTEGER DEFAULT 0, percentage REAL DEFAULT 0, FOREIGN KEY (tq_id) REFERENCES tournage_questions(id) ON DELETE CASCADE);
     `);
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN skip_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN rejected_count INTEGER DEFAULT 0"); } catch {}
@@ -448,6 +452,42 @@ async function updateCategory(id, name) {
   await runNoReturn("UPDATE categories SET name = $1 WHERE id = $2", [name, id]);
 }
 
+// --- Tournage (separate from survey) ---
+
+async function getTournageQuestions(catId) {
+  const rows = await all(
+    "SELECT tq.id, tq.text, tq.category_id, (SELECT COUNT(*) FROM tournage_answers ta WHERE ta.tq_id = tq.id) as answer_count FROM tournage_questions tq WHERE tq.category_id = $1 ORDER BY tq.id",
+    [catId]
+  );
+  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count) }));
+}
+
+async function getTournageQuestion(id) {
+  return get("SELECT tq.*, c.name as category_name FROM tournage_questions tq JOIN categories c ON c.id = tq.category_id WHERE tq.id = $1", [id]);
+}
+
+async function getTournageAnswers(tqId) {
+  return (await all("SELECT * FROM tournage_answers WHERE tq_id = $1 ORDER BY count DESC", [tqId]))
+    .map(r => ({ ...r, count: Number(r.count), percentage: Number(r.percentage) }));
+}
+
+async function insertTournageQuestion(catId, text) {
+  return run("INSERT INTO tournage_questions (category_id, text) VALUES ($1, $2)", [catId, text]);
+}
+
+async function deleteTournageQuestion(id) {
+  await runNoReturn("DELETE FROM tournage_answers WHERE tq_id = $1", [id]);
+  await runNoReturn("DELETE FROM tournage_questions WHERE id = $1", [id]);
+}
+
+async function clearTournageAnswers(tqId) {
+  await runNoReturn("DELETE FROM tournage_answers WHERE tq_id = $1", [tqId]);
+}
+
+async function insertTournageAnswer(tqId, text, count, percentage) {
+  await runNoReturn("INSERT INTO tournage_answers (tq_id, text, count, percentage) VALUES ($1, $2, $3, $4)", [tqId, text, count, percentage]);
+}
+
 module.exports = {
   init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
@@ -458,5 +498,7 @@ module.exports = {
   getCorrections, addCorrection, deleteCorrection,
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
+  getTournageQuestions, getTournageQuestion, getTournageAnswers,
+  insertTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer,
   THRESHOLD,
 };

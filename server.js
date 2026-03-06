@@ -608,25 +608,116 @@ app.get('/api/tournage/events', requireAdmin, (req, res) => {
   req.on('close', () => { clearInterval(keepalive); sseClients.delete(res); });
 });
 
+// --- Tournage API (separate from survey data) ---
+
 app.get('/api/tournage/categories', requireAdmin, async (req, res) => {
   try { res.json(await db.getAllCategories()); }
   catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/api/tournage/categories/:id/questions', requireAdmin, async (req, res) => {
-  try { res.json(await db.getQuestionsByCategory(req.params.id)); }
+  try { res.json(await db.getTournageQuestions(req.params.id)); }
   catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
-app.get('/api/tournage/questions/:id/answers', requireAdmin, async (req, res) => {
+app.get('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
   try {
-    const question = await db.getQuestionById(req.params.id);
-    if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const answers = await db.getAnswersWithScores(req.params.id);
-    res.json({ question, answers });
+    const q = await db.getTournageQuestion(req.params.id);
+    if (!q) return res.status(404).json({ error: 'Introuvable' });
+    const answers = await db.getTournageAnswers(q.id);
+    res.json({ question: q, answers });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.delete('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
+  try {
+    await db.deleteTournageQuestion(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// CSV import for a tournage question
+app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit: '5mb' }), async (req, res) => {
+  try {
+    const { csv, category_id, rescale, replace_tq_id } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    if (!csv || !category_id) return res.status(400).json({ error: 'CSV et category_id requis' });
+
+    // Parse CSV lines
+    const lines = csv.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) return res.status(400).json({ error: 'CSV vide ou invalide' });
+
+    // Try to detect header
+    const header = lines[0].toLowerCase();
+    const startIdx = (header.includes('question') || header.includes('réponse') || header.includes('reponse') || header.includes('count') || header.includes('club')) ? 1 : 0;
+
+    let questionText = null;
+    const answerRows = [];
+
+    for (let i = startIdx; i < lines.length; i++) {
+      // Parse CSV (handle quoted fields)
+      const cols = [];
+      let current = '', inQuotes = false;
+      for (let j = 0; j < lines[i].length; j++) {
+        const ch = lines[i][j];
+        if (ch === '"') { inQuotes = !inQuotes; }
+        else if ((ch === ',' || ch === ';') && !inQuotes) { cols.push(current.trim()); current = ''; }
+        else { current += ch; }
+      }
+      cols.push(current.trim());
+
+      if (cols.length < 4) continue;
+
+      // Format: question_id, club, question, réponse, count, pourcentage
+      // Or: question, réponse, count, pourcentage (shorter)
+      let qText, ansText, countVal, pctVal;
+      if (cols.length >= 6) {
+        qText = cols[2]; ansText = cols[3]; countVal = cols[4]; pctVal = cols[5];
+      } else if (cols.length >= 4) {
+        qText = cols[0]; ansText = cols[1]; countVal = cols[2]; pctVal = cols[3];
+      } else continue;
+
+      if (!questionText && qText) questionText = qText.replace(/^["']|["']$/g, '');
+      const text = ansText.replace(/^["']|["']$/g, '').trim();
+      const count = parseInt(countVal) || 0;
+      const pct = parseFloat(pctVal.replace('%', '').replace(',', '.')) || 0;
+      if (text && count > 0) answerRows.push({ text, count, pct });
+    }
+
+    if (!questionText || answerRows.length === 0) return res.status(400).json({ error: 'Aucune donnée valide trouvée dans le CSV' });
+
+    // Rescale counts to 100 if requested
+    if (rescale) {
+      const totalCount = answerRows.reduce((s, a) => s + a.count, 0);
+      if (totalCount > 0) {
+        answerRows.forEach(a => {
+          a.pct = (a.count / totalCount) * 100;
+          a.count = Math.round((a.count / totalCount) * 100);
+        });
+      }
+    }
+
+    // Sort by count desc
+    answerRows.sort((a, b) => b.count - a.count);
+
+    let tqId;
+    if (replace_tq_id) {
+      // Replace existing question answers
+      tqId = replace_tq_id;
+      await db.clearTournageAnswers(tqId);
+    } else {
+      const result = await db.insertTournageQuestion(category_id, questionText);
+      tqId = result.lastInsertRowid;
+    }
+
+    for (const a of answerRows) {
+      await db.insertTournageAnswer(tqId, a.text, a.count, a.pct);
+    }
+
+    res.json({ ok: true, tq_id: tqId, question: questionText, answer_count: answerRows.length });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur import: ' + e.message }); }
+});
+
+// SSE events for display
 app.post('/api/tournage/show-answer', requireAdmin, (req, res) => {
   const { answer, score } = req.body;
   sendSSE({ type: 'show-answer', answer, score });

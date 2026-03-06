@@ -2,9 +2,9 @@
   const $ = id => document.getElementById(id);
   let eventSource = null;
   let currentScore = 0;
-  let autoRevealTimer = null;
+  let currentAnswer = '';
 
-  // Auth check
+  // Auth
   async function checkAuth() {
     const res = await fetch('/api/admin/check');
     const data = await res.json();
@@ -13,6 +13,7 @@
       connectSSE();
     } else {
       $('login-overlay').classList.remove('hidden');
+      $('login-overlay').style.display = 'flex';
     }
   }
 
@@ -21,6 +22,7 @@
     const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
     if (res.ok) {
       $('login-overlay').classList.add('hidden');
+      $('login-overlay').style.display = 'none';
       connectSSE();
     } else {
       $('display-err').textContent = 'Mot de passe incorrect';
@@ -33,71 +35,34 @@
   function connectSSE() {
     if (eventSource) { eventSource.close(); eventSource = null; }
     eventSource = new EventSource('/api/tournage/events');
-    eventSource.onopen = () => {
-      console.log('SSE connected');
-      $('display-club').textContent = '🎬 Connecté — en attente';
-      $('display-club').style.display = '';
-    };
     eventSource.onmessage = (e) => {
       try {
-        if (e.data.startsWith(':')) return; // keepalive comment
-        const data = JSON.parse(e.data);
-        handleEvent(data);
+        if (e.data.startsWith(':')) return;
+        handleEvent(JSON.parse(e.data));
       } catch {}
     };
-    eventSource.onerror = () => {
-      console.log('SSE error, reconnecting...');
-      // EventSource auto-reconnects
-    };
+    eventSource.onerror = () => { /* auto-reconnects */ };
   }
 
   function handleEvent(data) {
     switch (data.type) {
       case 'set-club':
         resetDisplay();
-        const CLUBS = {
-          'Le Glouton Club': '🍔 Le Glouton Club',
-          'Metronomus': '🎵 Metronomus',
-          'Red carpet': '🎬 Red carpet',
-          'La situation': '💬 La situation'
-        };
-        $('display-club').textContent = CLUBS[data.club] || data.club;
-        $('display-club').style.display = '';
         break;
 
       case 'show-answer':
-        clearAutoReveal();
-        $('display-hors-panel').style.display = 'none';
-        $('display-score').style.display = 'none';
+        resetDisplay();
+        currentAnswer = data.answer || '';
         currentScore = data.score;
-
-        const answerEl = $('display-answer');
-        const textEl = $('display-answer-text');
-        textEl.textContent = data.answer.toUpperCase();
-        answerEl.style.display = 'flex';
-        answerEl.classList.remove('animate-in');
-        void answerEl.offsetWidth; // force reflow
-        answerEl.classList.add('animate-in');
-
-        // Auto-reveal score after 3 seconds
-        autoRevealTimer = setTimeout(() => revealScore(), 3000);
+        showAnswer(currentAnswer);
         break;
 
       case 'reveal-score':
-        clearAutoReveal();
         revealScore();
         break;
 
       case 'hors-panel':
-        clearAutoReveal();
-        $('display-answer').style.display = 'none';
-        $('display-score').style.display = 'none';
-
-        const hpEl = $('display-hors-panel');
-        hpEl.style.display = 'flex';
-        hpEl.classList.remove('animate-shake');
-        void hpEl.offsetWidth;
-        hpEl.classList.add('animate-shake');
+        showHorsPanel();
         break;
 
       case 'reset':
@@ -106,32 +71,89 @@
     }
   }
 
-  function revealScore() {
-    const scoreEl = $('display-score');
-    const numEl = $('display-score-num');
-    numEl.textContent = currentScore;
+  function showAnswer(text) {
+    const el = $('display-answer');
+    const textEl = $('display-answer-text');
+    textEl.textContent = text.toUpperCase();
 
-    // Color based on score
-    numEl.className = 'display-score-num';
-    if (currentScore <= 5) numEl.classList.add('score-green');
-    else if (currentScore <= 15) numEl.classList.add('score-orange');
-    else numEl.classList.add('score-red');
+    // Dynamic font size based on length
+    const len = text.length;
+    let fontSize = 82;
+    if (len > 30) fontSize = 52;
+    else if (len > 15) fontSize = 68;
+    textEl.style.fontSize = fontSize + 'px';
 
-    scoreEl.style.display = 'flex';
-    scoreEl.classList.remove('animate-pop');
-    void scoreEl.offsetWidth;
-    scoreEl.classList.add('animate-pop');
+    // Show with animation
+    el.classList.remove('visible');
+    void el.offsetWidth;
+    el.classList.add('visible');
   }
 
-  function clearAutoReveal() {
-    if (autoRevealTimer) { clearTimeout(autoRevealTimer); autoRevealTimer = null; }
+  function revealScore() {
+    if (currentScore == null) return;
+    const wrap = $('display-score-wrap');
+    const numEl = $('display-score-num');
+    const badge = $('display-badge');
+    const ring = $('display-ring');
+
+    numEl.textContent = currentScore;
+
+    // Color
+    let color, glowColor, badgeText, badgeClass;
+    if (currentScore <= 5) {
+      color = '#4ADE80'; glowColor = 'rgba(74,222,128,.4)'; badgeText = 'EXCELLENT'; badgeClass = 'badge-green';
+    } else if (currentScore <= 15) {
+      color = '#FBBF24'; glowColor = 'rgba(251,191,36,.4)'; badgeText = 'CORRECT'; badgeClass = 'badge-orange';
+    } else {
+      color = '#F87171'; glowColor = 'rgba(248,113,113,.4)'; badgeText = 'RISQUÉ'; badgeClass = 'badge-red';
+    }
+
+    numEl.style.color = color;
+    wrap.style.setProperty('--score-glow', glowColor);
+    badge.textContent = badgeText;
+    badge.className = 'display-badge ' + badgeClass;
+
+    // Ring burst
+    ring.style.borderColor = color;
+    ring.classList.remove('burst');
+    void ring.offsetWidth;
+    ring.classList.add('burst');
+
+    // Move answer up slightly
+    const ansEl = $('display-answer');
+    ansEl.style.transform = 'translateY(-20px)';
+
+    // Show score
+    wrap.classList.remove('visible');
+    void wrap.offsetWidth;
+    wrap.classList.add('visible');
+  }
+
+  function showHorsPanel() {
+    // Hide score wrap if visible
+    $('display-score-wrap').classList.remove('visible');
+    $('display-answer').classList.remove('visible');
+
+    const hp = $('display-hp-wrap');
+    $('display-hp-answer').textContent = currentAnswer.toUpperCase() || '';
+
+    hp.classList.remove('visible');
+    void hp.offsetWidth;
+    hp.classList.add('visible');
+
+    // Red vignette
+    $('display-vignette').classList.add('visible');
   }
 
   function resetDisplay() {
-    clearAutoReveal();
-    $('display-answer').style.display = 'none';
-    $('display-score').style.display = 'none';
-    $('display-hors-panel').style.display = 'none';
+    $('display-answer').classList.remove('visible');
+    $('display-answer').style.transform = '';
+    $('display-score-wrap').classList.remove('visible');
+    $('display-hp-wrap').classList.remove('visible');
+    $('display-vignette').classList.remove('visible');
+    $('display-ring').classList.remove('burst');
+    currentAnswer = '';
+    currentScore = 0;
   }
 
   checkAuth();
