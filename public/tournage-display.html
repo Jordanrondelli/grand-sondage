@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tournage — Plateau</title>
-  <link rel="stylesheet" href="/css/tournage.css?v=3">
+  <link rel="stylesheet" href="/css/tournage.css?v=4">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff}
@@ -32,35 +32,29 @@
 
     <!-- Content -->
     <div class="display-content" id="display-content">
-      <!-- Answer -->
+      <!-- Answer text -->
       <div class="display-answer" id="display-answer">
         <div class="display-answer-text" id="display-answer-text"></div>
-        <div class="display-line"></div>
       </div>
 
-      <!-- Score -->
+      <!-- Score (appears below answer) -->
       <div class="display-score-wrap" id="display-score-wrap">
-        <div class="display-ring" id="display-ring"></div>
         <span class="display-score-num" id="display-score-num"></span>
         <span class="display-score-unit">/100</span>
-        <div class="display-badge" id="display-badge"></div>
       </div>
+    </div>
 
-      <!-- Hors panel -->
-      <div class="display-hp-wrap" id="display-hp-wrap">
-        <div class="display-hp-answer" id="display-hp-answer"></div>
-        <div class="display-hp-line"></div>
-        <div class="display-hp-x">
-          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <line x1="20" y1="20" x2="100" y2="100" stroke="#F87171" stroke-width="8" stroke-linecap="round"/>
-            <line x1="100" y1="20" x2="20" y2="100" stroke="#F87171" stroke-width="8" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="display-hp-badge">Hors Panel</div>
+    <!-- Hors panel cross overlay (on top of everything) -->
+    <div class="display-hp-overlay" id="display-hp-overlay">
+      <div class="display-hp-cross" id="display-hp-cross">
+        <svg viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="30" y1="30" x2="190" y2="190" stroke="#EF4444" stroke-width="18" stroke-linecap="round"/>
+          <line x1="190" y1="30" x2="30" y2="190" stroke="#EF4444" stroke-width="18" stroke-linecap="round"/>
+        </svg>
       </div>
     </div>
   </div>
 
-  <script src="/js/tournage-display.js?v=5"></script>
+  <script src="/js/tournage-display.js?v=6"></script>
 </body>
 </html>

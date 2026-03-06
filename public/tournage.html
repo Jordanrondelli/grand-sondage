@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tournage — Régie</title>
   <link rel="stylesheet" href="/css/style.css?v=6">
-  <link rel="stylesheet" href="/css/tournage.css?v=3">
+  <link rel="stylesheet" href="/css/tournage.css?v=4">
 </head>
 <body>
   <div id="screen-login" class="screen active">
@@ -65,6 +65,10 @@
     <div class="modal-box">
       <h3>Importer le CSV</h3>
       <p class="modal-info" id="modal-info"></p>
+      <div class="modal-name-row">
+        <label class="modal-label">Nom de la question</label>
+        <input class="modal-name-input" id="modal-name-input" placeholder="Nom de la question...">
+      </div>
       <div class="modal-actions">
         <button class="btn-modal" id="btn-import-asis">Importer tel quel</button>
         <button class="btn-modal btn-modal-alt" id="btn-import-rescale">Ramener sur 100</button>
@@ -73,6 +77,6 @@
     </div>
   </div>
 
-  <script src="/js/tournage.js?v=4"></script>
+  <script src="/js/tournage.js?v=5"></script>
 </body>
 </html>

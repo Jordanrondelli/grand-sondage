@@ -202,6 +202,9 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       pendingCsv = ev.target.result;
+      // Pre-fill name with filename without extension
+      const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+      $('modal-name-input').value = baseName;
       $('modal-info').textContent = 'Fichier : ' + file.name + ' (' + Math.round(file.size / 1024) + ' Ko)';
       $('import-modal').style.display = '';
     };
@@ -216,7 +219,8 @@
   async function doImport(rescale) {
     $('import-modal').style.display = 'none';
     if (!pendingCsv || !currentCatId) return;
-    const body = { csv: pendingCsv, category_id: currentCatId, rescale };
+    const customName = $('modal-name-input').value.trim();
+    const body = { csv: pendingCsv, category_id: currentCatId, rescale, custom_name: customName || null };
     if (pendingReplaceTqId) {
       if (!confirm('Cela va écraser les réponses existantes. Continuer ?')) return;
       body.replace_tq_id = pendingReplaceTqId;

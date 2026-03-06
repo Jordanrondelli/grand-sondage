@@ -639,7 +639,7 @@ app.delete('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
 // CSV import for a tournage question
 app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit: '5mb' }), async (req, res) => {
   try {
-    const { csv, category_id, rescale, replace_tq_id } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const { csv, category_id, rescale, replace_tq_id, custom_name } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if (!csv || !category_id) return res.status(400).json({ error: 'CSV et category_id requis' });
 
     // Parse CSV lines
@@ -683,6 +683,8 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
       if (text && count > 0) answerRows.push({ text, count, pct });
     }
 
+    // Use custom name if provided, fallback to CSV-detected question text
+    if (custom_name) questionText = custom_name;
     if (!questionText || answerRows.length === 0) return res.status(400).json({ error: 'Aucune donnée valide trouvée dans le CSV' });
 
     // Rescale counts to 100 if requested

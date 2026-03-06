@@ -10,6 +10,7 @@
     const data = await res.json();
     if (data.authenticated) {
       $('login-overlay').classList.add('hidden');
+      $('login-overlay').style.display = 'none';
       connectSSE();
     } else {
       $('login-overlay').classList.remove('hidden');
@@ -41,7 +42,7 @@
         handleEvent(JSON.parse(e.data));
       } catch {}
     };
-    eventSource.onerror = () => { /* auto-reconnects */ };
+    eventSource.onerror = () => {};
   }
 
   function handleEvent(data) {
@@ -49,22 +50,18 @@
       case 'set-club':
         resetDisplay();
         break;
-
       case 'show-answer':
         resetDisplay();
         currentAnswer = data.answer || '';
         currentScore = data.score;
         showAnswer(currentAnswer);
         break;
-
       case 'reveal-score':
         revealScore();
         break;
-
       case 'hors-panel':
         showHorsPanel();
         break;
-
       case 'reset':
         resetDisplay();
         break;
@@ -76,16 +73,14 @@
     const textEl = $('display-answer-text');
     textEl.textContent = text.toUpperCase();
 
-    // Dynamic font size based on length
+    // Dynamic font size
     const len = text.length;
-    let fontSize = 82;
+    let fontSize = 90;
     if (len > 30) fontSize = 52;
     else if (len > 15) fontSize = 68;
     textEl.style.fontSize = fontSize + 'px';
 
-    // Show with animation
-    el.classList.remove('visible');
-    void el.offsetWidth;
+    // Smooth fade in
     el.classList.add('visible');
   }
 
@@ -93,53 +88,40 @@
     if (currentScore == null) return;
     const wrap = $('display-score-wrap');
     const numEl = $('display-score-num');
-    const badge = $('display-badge');
-    const ring = $('display-ring');
 
     numEl.textContent = currentScore;
 
-    // Color
-    let color, glowColor, badgeText, badgeClass;
+    // Color: green (low count) → orange → red (high count)
+    let color, glowColor;
     if (currentScore <= 5) {
-      color = '#4ADE80'; glowColor = 'rgba(74,222,128,.4)'; badgeText = 'EXCELLENT'; badgeClass = 'badge-green';
+      color = '#4ADE80'; glowColor = 'rgba(74,222,128,.4)';
     } else if (currentScore <= 15) {
-      color = '#FBBF24'; glowColor = 'rgba(251,191,36,.4)'; badgeText = 'CORRECT'; badgeClass = 'badge-orange';
+      color = '#FBBF24'; glowColor = 'rgba(251,191,36,.4)';
     } else {
-      color = '#F87171'; glowColor = 'rgba(248,113,113,.4)'; badgeText = 'RISQUÉ'; badgeClass = 'badge-red';
+      color = '#F87171'; glowColor = 'rgba(248,113,113,.4)';
     }
 
     numEl.style.color = color;
     wrap.style.setProperty('--score-glow', glowColor);
-    badge.textContent = badgeText;
-    badge.className = 'display-badge ' + badgeClass;
 
-    // Ring burst
-    ring.style.borderColor = color;
-    ring.classList.remove('burst');
-    void ring.offsetWidth;
-    ring.classList.add('burst');
-
-    // Move answer up slightly
-    const ansEl = $('display-answer');
-    ansEl.style.transform = 'translateY(-20px)';
-
-    // Show score
+    // Show with scale pop
     wrap.classList.remove('visible');
     void wrap.offsetWidth;
     wrap.classList.add('visible');
   }
 
   function showHorsPanel() {
-    // Hide score wrap if visible
+    // Keep the answer visible — don't hide it
+    // Hide score if it was shown
     $('display-score-wrap').classList.remove('visible');
-    $('display-answer').classList.remove('visible');
 
-    const hp = $('display-hp-wrap');
-    $('display-hp-answer').textContent = currentAnswer.toUpperCase() || '';
-
-    hp.classList.remove('visible');
-    void hp.offsetWidth;
-    hp.classList.add('visible');
+    // Show cross overlay with shake
+    const overlay = $('display-hp-overlay');
+    const cross = $('display-hp-cross');
+    overlay.classList.add('visible');
+    cross.classList.remove('shake');
+    void cross.offsetWidth;
+    cross.classList.add('shake');
 
     // Red vignette
     $('display-vignette').classList.add('visible');
@@ -147,11 +129,10 @@
 
   function resetDisplay() {
     $('display-answer').classList.remove('visible');
-    $('display-answer').style.transform = '';
     $('display-score-wrap').classList.remove('visible');
-    $('display-hp-wrap').classList.remove('visible');
+    $('display-hp-overlay').classList.remove('visible');
+    $('display-hp-cross').classList.remove('shake');
     $('display-vignette').classList.remove('visible');
-    $('display-ring').classList.remove('burst');
     currentAnswer = '';
     currentScore = 0;
   }
