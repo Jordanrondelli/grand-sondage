@@ -145,14 +145,26 @@
   }
 
   // --- Custom answer input ---
+  function findMatchInPanel(text) {
+    const t = text.toLowerCase().trim();
+    if (!t) return null;
+    // Exact match first
+    let match = currentAnswers.find(a => a.text.toLowerCase() === t);
+    if (match) return match;
+    // Then check if typed text contains a panel answer or vice-versa
+    match = currentAnswers.find(a => {
+      const at = a.text.toLowerCase();
+      return at.includes(t) || t.includes(at);
+    });
+    return match || null;
+  }
+
   $('btn-show-answer').onclick = () => {
     const text = $('custom-answer-input').value.trim();
     if (!text) return;
-    // Search in panel (case insensitive)
-    const match = currentAnswers.find(a => a.text.toLowerCase() === text.toLowerCase());
-    selectedAnswer = match ? { text: match.text, score: match.count } : { text, score: null };
+    const match = findMatchInPanel(text);
+    selectedAnswer = match ? { text: text, score: match.count } : { text, score: null };
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
-    // Highlight matching panel item
     if (match) {
       const idx = currentAnswers.indexOf(match);
       const btns = document.querySelectorAll('.answer-btn');
