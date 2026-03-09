@@ -629,6 +629,15 @@ app.get('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.put('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Nom requis' });
+    await db.renameTournageQuestion(req.params.id, text.trim());
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 app.delete('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
   try {
     await db.deleteTournageQuestion(req.params.id);

@@ -475,6 +475,10 @@ async function insertTournageQuestion(catId, text) {
   return run("INSERT INTO tournage_questions (category_id, text) VALUES ($1, $2)", [catId, text]);
 }
 
+async function renameTournageQuestion(id, text) {
+  await runNoReturn("UPDATE tournage_questions SET text = $1 WHERE id = $2", [text, id]);
+}
+
 async function deleteTournageQuestion(id) {
   await runNoReturn("DELETE FROM tournage_answers WHERE tq_id = $1", [id]);
   await runNoReturn("DELETE FROM tournage_questions WHERE id = $1", [id]);
@@ -499,6 +503,6 @@ module.exports = {
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
-  insertTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer,
+  insertTournageQuestion, renameTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer,
   THRESHOLD,
 };

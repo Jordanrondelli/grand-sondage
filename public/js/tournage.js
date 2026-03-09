@@ -94,10 +94,12 @@
         '<span class="tq-num">' + (i + 1) + '</span>' +
         '<span class="tq-text">' + esc(q.text) + '</span>' +
         '<span class="tq-count">' + q.answer_count + ' rép.</span>' +
+        '<button class="tq-rename" title="Renommer">✏️</button>' +
         '<button class="tq-reimport" title="Réimporter CSV">🔄</button>' +
         '<button class="tq-delete" title="Supprimer">🗑️</button>';
       item.querySelector('.tq-text').onclick = () => selectQuestion(q.id);
       item.querySelector('.tq-num').onclick = () => selectQuestion(q.id);
+      item.querySelector('.tq-rename').onclick = (e) => { e.stopPropagation(); renameQuestion(q.id, q.text); };
       item.querySelector('.tq-reimport').onclick = (e) => { e.stopPropagation(); startReimport(q.id); };
       item.querySelector('.tq-delete').onclick = (e) => { e.stopPropagation(); deleteQuestion(q.id, q.text); };
       list.appendChild(item);
@@ -247,6 +249,15 @@
     }
     pendingCsv = null;
     pendingReplaceTqId = null;
+  }
+
+  async function renameQuestion(tqId, currentText) {
+    const newName = prompt('Renommer la question :', currentText);
+    if (newName && newName.trim() && newName.trim() !== currentText) {
+      await api('/api/tournage/questions/' + tqId, { method: 'PUT', body: JSON.stringify({ text: newName.trim() }) });
+      await loadQuestions();
+      if (currentTqId === tqId) $('selected-q-label').textContent = newName.trim();
+    }
   }
 
   async function deleteQuestion(tqId, text) {

@@ -23,8 +23,8 @@
 .tq-text{flex:1;font-size:13px;color:#ccc;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tq-text:hover{color:#fff}
 .tq-count{font-size:11px;color:#666;white-space:nowrap}
-.tq-reimport,.tq-delete{background:none;border:none;cursor:pointer;font-size:13px;padding:2px 4px;opacity:.4;transition:opacity .15s}
-.tq-reimport:hover,.tq-delete:hover{opacity:1}
+.tq-rename,.tq-reimport,.tq-delete{background:none;border:none;cursor:pointer;font-size:13px;padding:2px 4px;opacity:.4;transition:opacity .15s}
+.tq-rename:hover,.tq-reimport:hover,.tq-delete:hover{opacity:1}
 
 .btn-import{width:100%;background:rgba(123,104,238,.1);border:1px solid rgba(123,104,238,.3);color:#7B68EE;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
 .btn-import:hover{background:rgba(123,104,238,.18);border-color:rgba(123,104,238,.5)}
