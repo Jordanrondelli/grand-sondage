@@ -7,8 +7,9 @@
   };
 
   const $ = id => document.getElementById(id);
-  let categories = [], questions = [], bannedWords = [], corrections = [];
+  let categories = [], questions = [], bannedWords = [], corrections = [], surveys = [];
   let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false, allowSkip = true, searchQuery = '';
+  let currentSurveyId = null; // the survey being viewed in admin
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
   function vCount(n) { return videoMode ? Math.round(n / 10) : n; }
@@ -22,21 +23,110 @@
   // Auth
   async function checkAuth() {
     const r = await fetch('/api/admin/check'); const d = await r.json();
-    if (d.authenticated) { show('screen-dashboard'); loadAll(); } else show('screen-login');
+    if (d.authenticated) { show('screen-dashboard'); loadSurveys(); } else show('screen-login');
   }
   $('btn-login').onclick = async () => {
     const pw = $('login-pw').value;
     const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
-    if (r.ok) { show('screen-dashboard'); loadAll(); }
+    if (r.ok) { show('screen-dashboard'); loadSurveys(); }
     else { $('login-err').textContent = 'Incorrect'; setTimeout(() => $('login-err').textContent = '', 1500); }
   };
   $('login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
 
-  // Load
+  // --- Survey management ---
+
+  async function loadSurveys() {
+    try {
+      const r = await api('/api/admin/surveys');
+      surveys = await r.json();
+      if (!currentSurveyId && surveys.length) {
+        currentSurveyId = surveys[0].id;
+      }
+      renderSurveyTabs();
+      loadAll();
+    } catch (e) { if (e.message !== 'unauth') console.error(e); }
+  }
+
+  function renderSurveyTabs() {
+    const c = $('survey-tabs'); c.innerHTML = '';
+    surveys.forEach(s => {
+      const tab = document.createElement('div');
+      tab.className = 'survey-tab' + (currentSurveyId === s.id ? ' active' : '') + (s.active ? ' is-active-survey' : '');
+      let html = '';
+      if (s.active) html += '<span class="survey-active-dot" title="Sondage actif (visible par les répondants)"></span>';
+      html += '<span>' + esc(s.name) + '</span>';
+      html += '<span class="survey-tab-actions">';
+      if (!s.active) html += '<button class="survey-activate-btn" title="Activer ce sondage">📡</button>';
+      html += '<button class="survey-rename-btn" title="Renommer">✏️</button>';
+      if (!s.active && surveys.length > 1) html += '<button class="survey-delete-btn" title="Supprimer">🗑️</button>';
+      html += '</span>';
+      tab.innerHTML = html;
+
+      tab.addEventListener('click', (e) => {
+        if (e.target.closest('.survey-tab-actions')) return;
+        currentSurveyId = s.id;
+        expandedId = null;
+        renderSurveyTabs();
+        loadAll();
+      });
+
+      const activateBtn = tab.querySelector('.survey-activate-btn');
+      if (activateBtn) {
+        activateBtn.onclick = async (e) => {
+          e.stopPropagation();
+          await api('/api/admin/surveys/' + s.id + '/activate', { method: 'POST' });
+          await loadSurveys();
+        };
+      }
+
+      tab.querySelector('.survey-rename-btn').onclick = (e) => {
+        e.stopPropagation();
+        const newName = prompt('Nouveau nom :', s.name);
+        if (newName && newName.trim() && newName.trim() !== s.name) {
+          api('/api/admin/surveys/' + s.id, { method: 'PUT', body: JSON.stringify({ name: newName.trim() }) })
+            .then(() => loadSurveys());
+        }
+      };
+
+      const deleteBtn = tab.querySelector('.survey-delete-btn');
+      if (deleteBtn) {
+        deleteBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (!confirm('Supprimer le sondage "' + s.name + '" et toutes ses réponses ?')) return;
+          await api('/api/admin/surveys/' + s.id, { method: 'DELETE' });
+          if (currentSurveyId === s.id) currentSurveyId = null;
+          await loadSurveys();
+        };
+      }
+
+      c.appendChild(tab);
+    });
+  }
+
+  $('btn-new-survey').onclick = async () => {
+    const name = prompt('Nom du nouveau sondage :');
+    if (!name || !name.trim()) return;
+    let duplicateFrom = null;
+    if (surveys.length > 0) {
+      if (confirm('Dupliquer les questions du sondage actuel ("' + (surveys.find(s => s.id === currentSurveyId)?.name || '') + '") ?')) {
+        duplicateFrom = currentSurveyId;
+      }
+    }
+    const r = await api('/api/admin/surveys', { method: 'POST', body: JSON.stringify({ name: name.trim(), duplicate_from: duplicateFrom }) });
+    const data = await r.json();
+    currentSurveyId = data.id;
+    await loadSurveys();
+  };
+
+  // --- Load all data for current survey ---
+
   async function loadAll() {
+    if (!currentSurveyId) return;
     try {
       const [sr, qr, cr, br, corr, amr, vmr, asr] = await Promise.all([
-        api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories'),
+        api('/api/admin/stats?survey_id=' + currentSurveyId),
+        api('/api/admin/questions?survey_id=' + currentSurveyId),
+        api('/api/admin/categories'),
         api('/api/admin/banned-words'), api('/api/admin/corrections'), api('/api/admin/settings/auto-merge'),
         api('/api/admin/settings/video-mode'), api('/api/admin/settings/allow-skip')
       ]);
@@ -147,7 +237,7 @@
   }
 
   async function loadDetail(id) {
-    const r = await api('/api/admin/questions/' + id + '/answers');
+    const r = await api('/api/admin/questions/' + id + '/answers?survey_id=' + currentSurveyId);
     const data = await r.json();
     const det = $('detail-' + id);
     if (!det) return;
@@ -177,7 +267,7 @@
       '<div class="ind-row"><span class="ind-icon">' + riskIcon + '</span><span class="ind-text">' + riskText + '</span></div>' +
       '<div class="verdict ' + verdictClass + '">' + verdictText + '</div></div>';
 
-    // Build variant map for merge (cluster canonical → all variant texts)
+    // Build variant map for merge
     const variantMap = {};
     html += '<div class="answer-list" id="alist-' + id + '">';
     data.answers.forEach((a, i) => {
@@ -223,12 +313,11 @@
     $('merge-go-' + id).onclick = async () => {
       const canonical = $('merge-input-' + id).value.trim();
       if (!canonical) return;
-      // Expand selected clusters to include all variant texts
       const allTexts = new Set();
       for (const norm of selectedSet) {
         (variantMap[norm] || [norm]).forEach(v => allTexts.add(v));
       }
-      await api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [...allTexts], canonical_text: canonical }) });
+      await api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [...allTexts], canonical_text: canonical, survey_id: currentSurveyId }) });
       selectedSet.clear();
       $('merge-input-' + id).value = '';
       await loadAll();
@@ -246,10 +335,10 @@
     // Per-question CSV export
     $('export-q-' + id).onclick = (e) => {
       e.stopPropagation();
-      window.location.href = '/api/admin/questions/' + id + '/export';
+      window.location.href = '/api/admin/questions/' + id + '/export?survey_id=' + currentSurveyId;
     };
 
-    // Answer editing: click edit button to rename
+    // Answer editing
     det.querySelectorAll('.answer-edit-btn').forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -259,7 +348,7 @@
         const current = nameEl.textContent;
         const newVal = prompt('Corriger cette réponse :', current);
         if (newVal && newVal.trim() && newVal.trim() !== current) {
-          api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [norm], canonical_text: newVal.trim() }) })
+          api('/api/admin/merge', { method: 'POST', body: JSON.stringify({ question_id: Number(id), answer_texts: [norm], canonical_text: newVal.trim(), survey_id: currentSurveyId }) })
             .then(() => { loadAll(); expandedId = id; setTimeout(() => { renderCards(); loadDetail(id); }, 200); });
         }
       };
@@ -301,7 +390,6 @@
       }
       c.appendChild(wrap);
     });
-    // Set add button color
     const club = CLUBS[editorClub] || { color: '#888' };
     $('btn-add-q').style.background = club.color;
   }
@@ -345,7 +433,7 @@
     const catObj = categories.find(c => c.name === editorClub);
     if (!catObj) { alert('Erreur : aucun club sélectionné. Clique sur un onglet de club.'); return; }
     try {
-      const r = await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ category_id: catObj.id, text: val }) });
+      const r = await api('/api/admin/questions', { method: 'POST', body: JSON.stringify({ category_id: catObj.id, text: val, survey_id: currentSurveyId }) });
       if (!r.ok) { const d = await r.json().catch(() => ({})); alert('Erreur : ' + (d.error || r.status)); return; }
       $('add-input').value = '';
       await loadAll();
@@ -454,7 +542,7 @@
   $('correction-right').addEventListener('keydown', e => { if (e.key === 'Enter') addCorrection(); });
 
   // Export
-  $('btn-export').onclick = () => { window.location.href = '/api/admin/export'; };
+  $('btn-export').onclick = () => { window.location.href = '/api/admin/export?survey_id=' + currentSurveyId; };
   // Tournage
   $('btn-tournage').onclick = () => { window.open('/tournage', '_blank'); };
 
@@ -462,7 +550,7 @@
   $('btn-reset').onclick = () => { $('confirm-reset').style.display = ''; };
   $('reset-no').onclick = () => { $('confirm-reset').style.display = 'none'; };
   $('reset-yes').onclick = async () => {
-    await api('/api/admin/reset', { method: 'POST' });
+    await api('/api/admin/reset', { method: 'POST', body: JSON.stringify({ survey_id: currentSurveyId }) });
     $('confirm-reset').style.display = 'none';
     expandedId = null;
     await loadAll();

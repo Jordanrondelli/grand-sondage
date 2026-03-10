@@ -77,6 +77,18 @@ async function init() {
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS response_time INTEGER").catch(() => {});
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS variant_group INTEGER DEFAULT NULL").catch(() => {});
     await pool.query("ALTER TABLE tournage_questions ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0").catch(() => {});
+
+    // --- Multi-survey tables ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS surveys (id SERIAL PRIMARY KEY, name TEXT NOT NULL, active INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS survey_questions (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, PRIMARY KEY (survey_id, question_id));
+    `);
+    await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS survey_id INTEGER REFERENCES surveys(id)").catch(() => {});
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_answers_survey ON answers(survey_id)").catch(() => {});
+    // Per-survey stats for skip/rejected per question
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id));
+    `).catch(() => {});
   } else {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
@@ -94,6 +106,15 @@ async function init() {
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN response_time INTEGER"); } catch {}
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN variant_group INTEGER DEFAULT NULL"); } catch {}
     try { sqlite.exec("ALTER TABLE tournage_questions ADD COLUMN sort_order INTEGER DEFAULT 0"); } catch {}
+
+    // --- Multi-survey tables ---
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS surveys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, active INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS survey_questions (survey_id INTEGER NOT NULL, question_id INTEGER NOT NULL, PRIMARY KEY (survey_id, question_id), FOREIGN KEY (survey_id) REFERENCES surveys(id) ON DELETE CASCADE, FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE);
+      CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL, question_id INTEGER NOT NULL, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id), FOREIGN KEY (survey_id) REFERENCES surveys(id) ON DELETE CASCADE, FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE);
+    `);
+    try { sqlite.exec("ALTER TABLE answers ADD COLUMN survey_id INTEGER REFERENCES surveys(id)"); } catch {}
+    try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_answers_survey ON answers(survey_id)"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
@@ -117,7 +138,6 @@ async function init() {
   await runNoReturn("UPDATE questions SET variant_group = NULL WHERE variant_group = 2 AND text = $1", ["Qu'est ce qu'on mange et qui vient de la mer ?"]);
 
   // Seed questions (idempotent — skips duplicates)
-  // Format: [categoryName, variantGroup (null if no variants), text]
   const cats = await all("SELECT * FROM categories");
   const catMap = {};
   cats.forEach(c => { catMap[c.name] = c.id; });
@@ -263,60 +283,171 @@ async function init() {
   if (am === null) await setSetting('auto_merge', '1');
   const as = await getSetting('allow_skip');
   if (as === null) await setSetting('allow_skip', '1');
+
+  // --- Multi-survey migration ---
+  // Create default "Sondage 1" if no surveys exist, and migrate existing data
+  const surveyCount = await get("SELECT COUNT(*) as c FROM surveys");
+  if (Number(surveyCount.c) === 0) {
+    const sr = await run("INSERT INTO surveys (name, active) VALUES ($1, $2)", ['Sondage 1', 1]);
+    const surveyId = sr.lastInsertRowid;
+    // Link all existing questions to this survey
+    const allQs = await all("SELECT id FROM questions");
+    for (const q of allQs) {
+      await runNoReturn("INSERT INTO survey_questions (survey_id, question_id) VALUES ($1, $2)", [surveyId, q.id]);
+    }
+    // Migrate existing answers to this survey
+    await runNoReturn("UPDATE answers SET survey_id = $1 WHERE survey_id IS NULL", [surveyId]);
+    // Migrate existing skip/rejected counts to survey_question_stats
+    const qsWithStats = await all("SELECT id, skip_count, rejected_count FROM questions WHERE skip_count > 0 OR rejected_count > 0");
+    for (const q of qsWithStats) {
+      await runNoReturn("INSERT INTO survey_question_stats (survey_id, question_id, skip_count, rejected_count) VALUES ($1, $2, $3, $4)", [surveyId, q.id, q.skip_count || 0, q.rejected_count || 0]);
+    }
+  }
 }
 
 // --- Queries ---
 
 const THRESHOLD = 1000;
 
-async function getAvailableQuestion(excludeIds) {
-  // Also exclude questions that share a variant_group with any already-answered question
+// --- Survey management ---
+
+async function getAllSurveys() {
+  return all("SELECT * FROM surveys ORDER BY id");
+}
+
+async function getActiveSurvey() {
+  return get("SELECT * FROM surveys WHERE active = 1");
+}
+
+async function createSurvey(name) {
+  return run("INSERT INTO surveys (name, active) VALUES ($1, $2)", [name, 0]);
+}
+
+async function renameSurvey(id, name) {
+  await runNoReturn("UPDATE surveys SET name = $1 WHERE id = $2", [name, id]);
+}
+
+async function activateSurvey(id) {
+  await runNoReturn("UPDATE surveys SET active = 0");
+  await runNoReturn("UPDATE surveys SET active = 1 WHERE id = $1", [id]);
+}
+
+async function deleteSurvey(id) {
+  // Delete answers, stats, question links for this survey
+  await runNoReturn("DELETE FROM answers WHERE survey_id = $1", [id]);
+  await runNoReturn("DELETE FROM survey_question_stats WHERE survey_id = $1", [id]);
+  await runNoReturn("DELETE FROM survey_questions WHERE survey_id = $1", [id]);
+  await runNoReturn("DELETE FROM surveys WHERE id = $1", [id]);
+}
+
+async function getSurveyQuestionIds(surveyId) {
+  const rows = await all("SELECT question_id FROM survey_questions WHERE survey_id = $1", [surveyId]);
+  return rows.map(r => r.question_id);
+}
+
+async function addQuestionToSurvey(surveyId, questionId) {
   if (isPostgres) {
-    const rows = await all(
-      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q JOIN categories c ON c.id = q.category_id
+    await pool.query("INSERT INTO survey_questions (survey_id, question_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [surveyId, questionId]);
+  } else {
+    sqlite.prepare("INSERT OR IGNORE INTO survey_questions (survey_id, question_id) VALUES (?, ?)").run(surveyId, questionId);
+  }
+}
+
+async function removeQuestionFromSurvey(surveyId, questionId) {
+  await runNoReturn("DELETE FROM survey_questions WHERE survey_id = $1 AND question_id = $2", [surveyId, questionId]);
+}
+
+async function duplicateQuestionsToSurvey(fromSurveyId, toSurveyId) {
+  const qids = await getSurveyQuestionIds(fromSurveyId);
+  for (const qid of qids) {
+    await addQuestionToSurvey(toSurveyId, qid);
+  }
+}
+
+// --- Question queries (survey-scoped) ---
+
+function getAvailableQuestion(surveyId, excludeIds) {
+  if (isPostgres) {
+    return all(
+      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
+       JOIN categories c ON c.id = q.category_id
+       JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = $1
        WHERE q.active = 1
-         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < $1
-         AND NOT (q.id = ANY($2::int[]))
+         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1) < $2
+         AND NOT (q.id = ANY($3::int[]))
          AND (q.variant_group IS NULL OR q.variant_group NOT IN (
-           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($2::int[])
+           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($3::int[])
          ))
        ORDER BY RANDOM() LIMIT 1`,
-      [THRESHOLD, excludeIds]
-    );
-    return rows[0] || null;
+      [surveyId, THRESHOLD, excludeIds]
+    ).then(rows => rows[0] || null);
   } else {
-    return sqlite.prepare(
-      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q JOIN categories c ON c.id = q.category_id
+    return Promise.resolve(sqlite.prepare(
+      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
+       JOIN categories c ON c.id = q.category_id
+       JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = ?
        WHERE q.active = 1
-         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) < ?
+         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ?) < ?
          AND q.id NOT IN (SELECT value FROM json_each(?))
          AND (q.variant_group IS NULL OR q.variant_group NOT IN (
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
          ))
        ORDER BY RANDOM() LIMIT 1`
-    ).get(THRESHOLD, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null;
+    ).get(surveyId, surveyId, THRESHOLD, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
   }
 }
 
-async function insertAnswer(qid, text, responseTime) {
-  await runNoReturn("INSERT INTO answers (question_id, text, response_time) VALUES ($1, $2, $3)", [qid, text, responseTime || null]);
+async function insertAnswer(surveyId, qid, text, responseTime) {
+  await runNoReturn("INSERT INTO answers (survey_id, question_id, text, response_time) VALUES ($1, $2, $3, $4)", [surveyId, qid, text, responseTime || null]);
 }
 
-async function incrementSkip(qid) {
-  await runNoReturn("UPDATE questions SET skip_count = COALESCE(skip_count, 0) + 1 WHERE id = $1", [qid]);
+async function incrementSkip(surveyId, qid) {
+  // Update per-survey stats
+  if (isPostgres) {
+    await pool.query("INSERT INTO survey_question_stats (survey_id, question_id, skip_count, rejected_count) VALUES ($1, $2, 1, 0) ON CONFLICT (survey_id, question_id) DO UPDATE SET skip_count = survey_question_stats.skip_count + 1", [surveyId, qid]);
+  } else {
+    const exists = await get("SELECT 1 FROM survey_question_stats WHERE survey_id = $1 AND question_id = $2", [surveyId, qid]);
+    if (exists) {
+      await runNoReturn("UPDATE survey_question_stats SET skip_count = skip_count + 1 WHERE survey_id = $1 AND question_id = $2", [surveyId, qid]);
+    } else {
+      await runNoReturn("INSERT INTO survey_question_stats (survey_id, question_id, skip_count, rejected_count) VALUES ($1, $2, 1, 0)", [surveyId, qid]);
+    }
+  }
 }
 
-async function getAnswerCount(qid) {
-  return Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1", [qid])).c);
+async function incrementRejected(surveyId, qid) {
+  if (isPostgres) {
+    await pool.query("INSERT INTO survey_question_stats (survey_id, question_id, skip_count, rejected_count) VALUES ($1, $2, 0, 1) ON CONFLICT (survey_id, question_id) DO UPDATE SET rejected_count = survey_question_stats.rejected_count + 1", [surveyId, qid]);
+  } else {
+    const exists = await get("SELECT 1 FROM survey_question_stats WHERE survey_id = $1 AND question_id = $2", [surveyId, qid]);
+    if (exists) {
+      await runNoReturn("UPDATE survey_question_stats SET rejected_count = rejected_count + 1 WHERE survey_id = $1 AND question_id = $2", [surveyId, qid]);
+    } else {
+      await runNoReturn("INSERT INTO survey_question_stats (survey_id, question_id, skip_count, rejected_count) VALUES ($1, $2, 0, 1)", [surveyId, qid]);
+    }
+  }
+}
+
+async function getAnswerCount(surveyId, qid) {
+  return Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2", [qid, surveyId])).c);
 }
 
 async function getAllCategories() {
   return all("SELECT * FROM categories ORDER BY name");
 }
 
-async function getQuestionsWithCounts() {
+async function getQuestionsWithCounts(surveyId) {
   const rows = await all(
-    "SELECT q.id, q.text, q.active, q.category_id, q.skip_count, q.rejected_count, q.variant_group, c.name as category_name, (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count, (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.response_time IS NOT NULL) as avg_time FROM questions q JOIN categories c ON c.id = q.category_id ORDER BY c.name, q.id"
+    `SELECT q.id, q.text, q.active, q.category_id, q.variant_group, c.name as category_name,
+      (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1) as answer_count,
+      (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.response_time IS NOT NULL) as avg_time,
+      COALESCE((SELECT sqs.skip_count FROM survey_question_stats sqs WHERE sqs.survey_id = $1 AND sqs.question_id = q.id), 0) as skip_count,
+      COALESCE((SELECT sqs.rejected_count FROM survey_question_stats sqs WHERE sqs.survey_id = $1 AND sqs.question_id = q.id), 0) as rejected_count
+    FROM questions q
+    JOIN categories c ON c.id = q.category_id
+    JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = $1
+    ORDER BY c.name, q.id`,
+    [surveyId]
   );
   return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), rejected_count: Number(r.rejected_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null, variant_group: r.variant_group || null }));
 }
@@ -325,20 +456,23 @@ async function getQuestionById(id) {
   return get("SELECT q.*, c.name as category_name FROM questions q JOIN categories c ON c.id = q.category_id WHERE q.id = $1", [id]);
 }
 
-async function getAnswersGrouped(qid) {
+async function getAnswersGrouped(surveyId, qid) {
   const rows = await all(
-    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
-    [qid]
+    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 AND survey_id = $2 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
+    [qid, surveyId]
   );
   return rows.map(r => ({ ...r, count: Number(r.count) }));
 }
 
-async function getStats() {
-  const totalAnswers = Number((await get("SELECT COUNT(*) as c FROM answers")).c);
-  const completeQuestions = Number((await get(
-    "SELECT COUNT(*) as c FROM questions q WHERE (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) >= $1", [THRESHOLD]
-  )).c);
-  const totalQuestions = Number((await get("SELECT COUNT(*) as c FROM questions WHERE active = 1")).c);
+async function getStats(surveyId) {
+  const totalAnswers = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1", [surveyId])).c);
+  const sqIds = await getSurveyQuestionIds(surveyId);
+  let completeQuestions = 0;
+  for (const qid of sqIds) {
+    const cnt = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2", [qid, surveyId])).c);
+    if (cnt >= THRESHOLD) completeQuestions++;
+  }
+  const totalQuestions = sqIds.length;
   return { totalAnswers, completeQuestions, totalQuestions, threshold: THRESHOLD };
 }
 
@@ -355,26 +489,35 @@ async function updateQuestion(id, text, catId) {
 
 async function deleteQuestion(id) {
   await runNoReturn("DELETE FROM answers WHERE question_id = $1", [id]);
+  await runNoReturn("DELETE FROM survey_question_stats WHERE question_id = $1", [id]);
+  await runNoReturn("DELETE FROM survey_questions WHERE question_id = $1", [id]);
   await runNoReturn("DELETE FROM questions WHERE id = $1", [id]);
 }
 
-async function mergeAnswers(qid, texts, canonical) {
+async function mergeAnswers(surveyId, qid, texts, canonical) {
   const lowered = texts.map(t => t.toLowerCase().trim());
   if (isPostgres) {
     await pool.query(
-      "UPDATE answers SET text = $1 WHERE question_id = $2 AND LOWER(TRIM(text)) = ANY($3::text[])",
-      [canonical, qid, lowered]
+      "UPDATE answers SET text = $1 WHERE question_id = $2 AND survey_id = $3 AND LOWER(TRIM(text)) = ANY($4::text[])",
+      [canonical, qid, surveyId, lowered]
     );
   } else {
     sqlite.prepare(
-      "UPDATE answers SET text = ? WHERE question_id = ? AND LOWER(TRIM(text)) IN (SELECT value FROM json_each(?))"
-    ).run(canonical, qid, JSON.stringify(lowered));
+      "UPDATE answers SET text = ? WHERE question_id = ? AND survey_id = ? AND LOWER(TRIM(text)) IN (SELECT value FROM json_each(?))"
+    ).run(canonical, qid, surveyId, JSON.stringify(lowered));
   }
 }
 
-async function getAllAnswersForExport() {
+async function getAllAnswersForExport(surveyId) {
   const rows = await all(
-    "SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count, q.skip_count, (SELECT ROUND(AVG(a2.response_time)) FROM answers a2 WHERE a2.question_id = q.id AND a2.response_time IS NOT NULL) as avg_time FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text)), q.skip_count ORDER BY q.id, count DESC"
+    `SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count,
+      COALESCE((SELECT sqs.skip_count FROM survey_question_stats sqs WHERE sqs.survey_id = $1 AND sqs.question_id = q.id), 0) as skip_count,
+      (SELECT ROUND(AVG(a2.response_time)) FROM answers a2 WHERE a2.question_id = q.id AND a2.survey_id = $1 AND a2.response_time IS NOT NULL) as avg_time
+    FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id
+    WHERE a.survey_id = $1
+    GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text))
+    ORDER BY q.id, count DESC`,
+    [surveyId]
   );
   return rows.map(r => ({ ...r, count: Number(r.count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
@@ -392,13 +535,9 @@ async function setSetting(key, value) {
   }
 }
 
-async function getExistingAnswers(qid) {
-  const rows = await all("SELECT text, COUNT(*) as count FROM answers WHERE question_id = $1 GROUP BY text ORDER BY count DESC", [qid]);
+async function getExistingAnswers(surveyId, qid) {
+  const rows = await all("SELECT text, COUNT(*) as count FROM answers WHERE question_id = $1 AND survey_id = $2 GROUP BY text ORDER BY count DESC", [qid, surveyId]);
   return rows.map(r => ({ text: r.text, count: Number(r.count) }));
-}
-
-async function incrementRejected(qid) {
-  await runNoReturn("UPDATE questions SET rejected_count = COALESCE(rejected_count, 0) + 1 WHERE id = $1", [qid]);
 }
 
 async function getBannedWords() {
@@ -437,15 +576,15 @@ async function deleteCorrection(id) {
   await runNoReturn("DELETE FROM corrections WHERE id = $1", [id]);
 }
 
-async function getTotalParticipantCount() {
-  const row = await get("SELECT COUNT(*) as c FROM answers");
+async function getTotalParticipantCount(surveyId) {
+  const row = await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1", [surveyId]);
   return Number(row.c);
 }
 
-async function getAnswersWithScores(qid) {
+async function getAnswersWithScores(surveyId, qid) {
   const rows = await all(
-    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
-    [qid]
+    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 AND survey_id = $2 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
+    [qid, surveyId]
   );
   const mapped = rows.map(r => ({ ...r, count: Number(r.count) }));
   const total = mapped.reduce((s, a) => s + a.count, 0);
@@ -464,8 +603,9 @@ async function getQuestionsByCategory(catId) {
   )).map(r => ({ ...r, answer_count: Number(r.answer_count) }));
 }
 
-async function deleteAllAnswers() {
-  await runNoReturn("DELETE FROM answers");
+async function deleteAllAnswersForSurvey(surveyId) {
+  await runNoReturn("DELETE FROM answers WHERE survey_id = $1", [surveyId]);
+  await runNoReturn("DELETE FROM survey_question_stats WHERE survey_id = $1", [surveyId]);
 }
 
 async function insertCategory(name) {
@@ -533,11 +673,15 @@ module.exports = {
   getAllCategories, getQuestionsWithCounts, getQuestionById,
   getAnswersGrouped, getStats, insertQuestion, updateQuestion,
   deleteQuestion, mergeAnswers, getAllAnswersForExport,
-  deleteAllAnswers, insertCategory, updateCategory,
+  deleteAllAnswersForSurvey, insertCategory, updateCategory,
   getBannedWords, addBannedWord, deleteBannedWord,
   getCorrections, addCorrection, deleteCorrection,
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
+  // Survey management
+  getAllSurveys, getActiveSurvey, createSurvey, renameSurvey, activateSurvey, deleteSurvey,
+  getSurveyQuestionIds, addQuestionToSurvey, removeQuestionFromSurvey, duplicateQuestionsToSurvey,
+  // Tournage
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
   insertTournageQuestion, renameTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer, reorderTournageQuestions,
   THRESHOLD,

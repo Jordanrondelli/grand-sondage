@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Le Sondage</title>
-  <link rel="stylesheet" href="/css/style.css?v=6">
+  <link rel="stylesheet" href="/css/style.css?v=7">
 </head>
 <body>
   <nav class="nav">
@@ -24,6 +24,13 @@
 
   <div id="screen-dashboard" class="screen top-align">
     <div class="admin-wrap">
+
+      <!-- Survey selector -->
+      <div class="survey-bar" id="survey-bar">
+        <div class="survey-tabs" id="survey-tabs"></div>
+        <button class="btn-new-survey" id="btn-new-survey">+ Nouveau sondage</button>
+      </div>
+
       <!-- Stats -->
       <div class="stats-row">
         <div class="stat-card"><div class="stat-num" id="s-total">0</div><div class="stat-label">réponses</div></div>
@@ -105,15 +112,15 @@
       <div class="q-cards" id="q-cards"></div>
 
       <!-- Reset -->
-      <button class="btn-reset" id="btn-reset">🗑️ Réinitialiser les données</button>
+      <button class="btn-reset" id="btn-reset">🗑️ Réinitialiser les données de ce sondage</button>
       <div class="confirm-reset" id="confirm-reset" style="display:none">
-        <p>⚠️ Irréversible. Toutes les réponses seront supprimées.</p>
+        <p>⚠️ Irréversible. Toutes les réponses <strong>de ce sondage</strong> seront supprimées.</p>
         <button class="yes" id="reset-yes">Supprimer</button>
         <button class="no" id="reset-no">Annuler</button>
       </div>
     </div>
   </div>
 
-  <script src="/js/admin.js?v=13"></script>
+  <script src="/js/admin.js?v=14"></script>
 </body>
 </html>

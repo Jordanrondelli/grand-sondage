@@ -11,15 +11,13 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'clubsecret2026';
 
 // --- Normalization & Validation ---
 
-// Cache for banned words, corrections, settings (refreshed every 60s)
+// Cache for banned words, settings (refreshed every 60s)
 let bannedWordsCache = [];
-let correctionsCache = [];
 let autoMergeEnabled = true;
 let cacheTime = 0;
 async function refreshCache() {
   if (Date.now() - cacheTime < 60000) return;
   bannedWordsCache = await db.getBannedWords();
-  correctionsCache = await db.getCorrections();
   const am = await db.getSetting('auto_merge');
   autoMergeEnabled = am !== '0';
   cacheTime = Date.now();
@@ -49,39 +47,20 @@ function containsBannedWord(text) {
   return false;
 }
 
-function applyCorrections(text) {
-  for (const { wrong, correct } of correctionsCache) {
-    if (text === wrong) return correct;
-    const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    text = text.replace(new RegExp(escaped, 'gi'), correct);
-  }
-  return text.trim();
-}
-
 function isGibberish(text) {
   const stripped = text.replace(/[\s'''-]/g, '');
-  // Too short
   if (stripped.length < 2) return true;
-  // Only repeated same character: "aaa", "..."
   if (/^(.)\1+$/.test(stripped)) return true;
-  // No vowel at all — not a real word (but allow numbers like "42")
   if (!/[aeiouyàâäéèêëïîôùûüÿœæ0-9]/i.test(stripped)) return true;
-  // 5+ consonants in a row — keyboard mash
   if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(stripped)) return true;
-  // Same consonant 3+ times in a row: "bbb", "kkk"
   if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(stripped)) return true;
-  // Single char dominance >60% (for 6+ chars)
   if (stripped.length >= 6) {
     const freq = {};
     for (const ch of stripped) freq[ch] = (freq[ch] || 0) + 1;
     if (Math.max(...Object.values(freq)) / stripped.length > 0.6) return true;
   }
-  // Repeating short pattern 3+ times: "ababab"
   if (/^(.{1,3})\1{2,}$/i.test(stripped)) return true;
-  // Same vowel 3+ times in a row: "ooooj", "aaaa"
   if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(stripped)) return true;
-  // Long string with very few unique chars — keyboard spam
-  if (stripped.length > 10 && new Set(stripped.toLowerCase()).size <= stripped.length / 3) return true;
   return false;
 }
 
@@ -92,7 +71,6 @@ function deepNormalize(text) {
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '');
-  // Common phonetic substitutions for French
   s = s.replace(/ph/g, 'f')
     .replace(/qu/g, 'k')
     .replace(/ck/g, 'k')
@@ -100,7 +78,6 @@ function deepNormalize(text) {
     .replace(/eau/g, 'o')
     .replace(/au/g, 'o')
     .replace(/ou/g, 'u');
-  // Collapse repeated chars
   s = s.replace(/(.)\1+/g, '$1');
   return s;
 }
@@ -130,13 +107,10 @@ function areSimilar(a, b) {
   const maxLen = Math.max(na.length, nb.length);
   if (maxLen === 0) return true;
   const dist = levenshtein(na, nb);
-  // More aggressive: 40% tolerance for clustering
   const threshold = maxLen <= 4 ? 1 : Math.ceil(maxLen * 0.4);
   return dist <= threshold;
 }
 
-// Find matching existing answer — returns existing text or null
-// Uses phonetic normalization + Levenshtein with 35% tolerance
 function findMatchingAnswer(newText, existingAnswers) {
   const newNorm = deepNormalize(newText);
   let bestMatch = null, bestDist = Infinity;
@@ -148,7 +122,6 @@ function findMatchingAnswer(newText, existingAnswers) {
     if (maxLen === 0) continue;
     const dist = levenshtein(newNorm, existNorm);
     const ratio = dist / maxLen;
-    // 35% tolerance — aggressive merge for short answers
     if (ratio <= 0.35 && dist < bestDist) {
       bestDist = dist;
       bestMatch = text;
@@ -157,7 +130,6 @@ function findMatchingAnswer(newText, existingAnswers) {
   return bestMatch;
 }
 
-// Cluster answers for CSV export (more permissive — 70% similarity)
 function clusterAnswers(answers) {
   const clusters = [];
   for (const item of answers) {
@@ -208,7 +180,7 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
 
-// Health check (used by Render + external ping services)
+// Health check
 app.get('/health', (req, res) => res.status(200).send('ok'));
 
 function requireAdmin(req, res, next) {
@@ -216,15 +188,22 @@ function requireAdmin(req, res, next) {
   res.status(401).json({ error: 'Non autorisé' });
 }
 
+// --- Helper: get active survey ---
+async function getActiveSurveyId() {
+  const s = await db.getActiveSurvey();
+  return s ? s.id : null;
+}
+
 // --- Public API ---
 
-// Questions that allow longer answers (maxlength exception)
 const LONG_ANSWER_PATTERNS = ['réplique de film'];
 
 app.get('/api/questions/next', async (req, res) => {
   try {
+    const surveyId = await getActiveSurveyId();
+    if (!surveyId) return res.json({ done: true });
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
-    const q = await db.getAvailableQuestion(ex);
+    const q = await db.getAvailableQuestion(surveyId, ex);
     if (!q) return res.json({ done: true });
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
     const cleanText = q.text.replace(/^\[V2\]\s*/, '');
@@ -238,39 +217,40 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
+    const surveyId = await getActiveSurveyId();
+    if (!surveyId) return res.status(400).json({ error: 'Aucun sondage actif' });
+
     await refreshCache();
 
-    // Determine max length for this question
     const question = await db.getQuestionById(question_id);
     const isLong = question && LONG_ANSWER_PATTERNS.some(p => question.text.toLowerCase().includes(p));
     const maxLen = isLong ? 200 : 40;
 
     let normalized = normalizeAnswer(text);
     if (!normalized || normalized.length < 2 || normalized.length > maxLen) {
-      await db.incrementRejected(question_id);
+      await db.incrementRejected(surveyId, question_id);
       return res.status(400).json({ error: normalized && normalized.length > maxLen ? 'Réponse trop longue (max ' + maxLen + ' caractères)' : 'Donne une vraie réponse 😉', troll: true });
     }
     const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 45) ? Math.round(response_time) : null;
     if (isGibberish(normalized) || containsBannedWord(normalized)) {
-      await db.incrementRejected(question_id);
+      await db.incrementRejected(surveyId, question_id);
       return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
     }
 
-    // Apply auto-corrections
-    normalized = applyCorrections(normalized);
+    // No auto-corrections — keep raw normalized answer
 
-    const count = await db.getAnswerCount(question_id);
+    const count = await db.getAnswerCount(surveyId, question_id);
     if (count >= db.THRESHOLD)
       return res.status(410).json({ error: 'Complet' });
 
     // Fuzzy match against existing answers (if enabled)
     if (autoMergeEnabled) {
-      const existing = await db.getExistingAnswers(question_id);
+      const existing = await db.getExistingAnswers(surveyId, question_id);
       const match = findMatchingAnswer(normalized, existing);
       if (match) normalized = match;
     }
 
-    await db.insertAnswer(question_id, normalized, rt);
+    await db.insertAnswer(surveyId, question_id, normalized, rt);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -279,7 +259,9 @@ app.post('/api/questions/:id/skip', rateLimit, async (req, res) => {
   try {
     const allowSkip = await db.getSetting('allow_skip');
     if (allowSkip === '0') return res.status(403).json({ error: 'Skip désactivé' });
-    await db.incrementSkip(req.params.id);
+    const surveyId = await getActiveSurveyId();
+    if (!surveyId) return res.status(400).json({ error: 'Aucun sondage actif' });
+    await db.incrementSkip(surveyId, req.params.id);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -292,8 +274,10 @@ app.get('/api/settings/allow-skip', async (req, res) => {
 });
 
 app.get('/api/stats/participants', async (req, res) => {
-  try { res.json({ count: await db.getTotalParticipantCount() }); }
-  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const surveyId = await getActiveSurveyId();
+    res.json({ count: surveyId ? await db.getTotalParticipantCount(surveyId) : 0 });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 // --- SSE for shooting mode ---
@@ -315,10 +299,78 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/check', (req, res) => { res.json({ authenticated: !!req.session?.isAdmin }); });
 app.post('/api/admin/logout', (req, res) => { req.session.destroy(); res.json({ ok: true }); });
 
-// --- Admin API ---
+// --- Admin: Survey management ---
+
+app.get('/api/admin/surveys', requireAdmin, async (req, res) => {
+  try { res.json(await db.getAllSurveys()); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/surveys', requireAdmin, async (req, res) => {
+  try {
+    const { name, duplicate_from } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nom requis' });
+    const r = await db.createSurvey(name.trim());
+    const newId = r.lastInsertRowid;
+    if (duplicate_from) {
+      await db.duplicateQuestionsToSurvey(duplicate_from, newId);
+    }
+    res.json({ id: newId, name: name.trim() });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nom requis' });
+    await db.renameSurvey(req.params.id, name.trim());
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/surveys/:id/activate', requireAdmin, async (req, res) => {
+  try {
+    await db.activateSurvey(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  try {
+    // Don't allow deleting the last survey
+    const surveys = await db.getAllSurveys();
+    if (surveys.length <= 1) return res.status(400).json({ error: 'Impossible de supprimer le dernier sondage' });
+    const survey = surveys.find(s => s.id === Number(req.params.id));
+    if (survey?.active) return res.status(400).json({ error: 'Impossible de supprimer le sondage actif' });
+    await db.deleteSurvey(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// Add/remove questions from a survey
+app.post('/api/admin/surveys/:id/questions', requireAdmin, async (req, res) => {
+  try {
+    const { question_id } = req.body;
+    await db.addQuestionToSurvey(req.params.id, question_id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/admin/surveys/:surveyId/questions/:questionId', requireAdmin, async (req, res) => {
+  try {
+    await db.removeQuestionFromSurvey(req.params.surveyId, req.params.questionId);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// --- Admin API (survey-scoped) ---
 
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
-  try { res.json(await db.getStats()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.json({ totalAnswers: 0, completeQuestions: 0, totalQuestions: 0, threshold: db.THRESHOLD });
+    res.json(await db.getStats(Number(surveyId)));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/api/admin/categories', requireAdmin, async (req, res) => {
@@ -343,14 +395,22 @@ app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/questions', requireAdmin, async (req, res) => {
-  try { res.json(await db.getQuestionsWithCounts()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.json([]);
+    res.json(await db.getQuestionsWithCounts(Number(surveyId)));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.post('/api/admin/questions', requireAdmin, async (req, res) => {
   try {
-    const { category_id, text } = req.body;
+    const { category_id, text, survey_id } = req.body;
     if (!category_id || !text?.trim()) return res.status(400).json({ error: 'Requis' });
     const r = await db.insertQuestion(category_id, text.trim());
+    // Auto-add to the specified survey
+    if (survey_id) {
+      await db.addQuestionToSurvey(survey_id, r.lastInsertRowid);
+    }
     res.json({ id: r.lastInsertRowid });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -371,9 +431,11 @@ app.delete('/api/admin/questions/:id', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
   try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const rawAnswers = await db.getAnswersGrouped(req.params.id);
+    const rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
 
     // Fuzzy-cluster similar answers for display
     const clustered = [];
@@ -433,10 +495,10 @@ app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/merge', requireAdmin, async (req, res) => {
   try {
-    const { question_id, answer_texts, canonical_text } = req.body;
-    if (!question_id || !answer_texts?.length || !canonical_text)
+    const { question_id, answer_texts, canonical_text, survey_id } = req.body;
+    if (!question_id || !answer_texts?.length || !canonical_text || !survey_id)
       return res.status(400).json({ error: 'Invalide' });
-    await db.mergeAnswers(question_id, answer_texts, canonical_text.trim());
+    await db.mergeAnswers(Number(survey_id), question_id, answer_texts, canonical_text.trim());
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -533,8 +595,9 @@ app.put('/api/admin/settings/allow-skip', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
   try {
-    const rows = await db.getAllAnswersForExport();
-    // Group by question
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
+    const rows = await db.getAllAnswersForExport(Number(surveyId));
     const byQuestion = {};
     rows.forEach(r => {
       if (!byQuestion[r.question_id]) {
@@ -567,11 +630,12 @@ app.get('/api/admin/export', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/questions/:id/export', requireAdmin, async (req, res) => {
   try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const rawAnswers = await db.getAnswersGrouped(req.params.id);
+    const rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
 
-    // Cluster similar answers
     const clustered = [];
     for (const item of rawAnswers) {
       let merged = false;
@@ -609,8 +673,12 @@ app.get('/api/admin/questions/:id/export', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/reset', requireAdmin, async (req, res) => {
-  try { await db.deleteAllAnswers(); res.json({ ok: true }); }
-  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const { survey_id } = req.body;
+    if (!survey_id) return res.status(400).json({ error: 'survey_id requis' });
+    await db.deleteAllAnswersForSurvey(Number(survey_id));
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/admin', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
@@ -625,15 +693,14 @@ app.get('/api/tournage/events', requireAdmin, (req, res) => {
     'X-Accel-Buffering': 'no',
     'Content-Encoding': 'none',
   });
-  res.write(':\n\n'); // SSE comment keepalive
+  res.write(':\n\n');
   res.flush && res.flush();
   sseClients.add(res);
-  // Keepalive every 15s to prevent proxy timeout
   const keepalive = setInterval(() => { res.write(':\n\n'); res.flush && res.flush(); }, 15000);
   req.on('close', () => { clearInterval(keepalive); sseClients.delete(res); });
 });
 
-// --- Tournage API (separate from survey data) ---
+// --- Tournage API ---
 
 app.get('/api/tournage/categories', requireAdmin, async (req, res) => {
   try { res.json(await db.getAllCategories()); }
@@ -685,11 +752,9 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
     const { csv, category_id, rescale, replace_tq_id, custom_name } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if (!csv || !category_id) return res.status(400).json({ error: 'CSV et category_id requis' });
 
-    // Parse CSV lines
     const lines = csv.split('\n').map(l => l.trim()).filter(l => l);
     if (lines.length < 2) return res.status(400).json({ error: 'CSV vide ou invalide' });
 
-    // Try to detect header
     const header = lines[0].toLowerCase();
     const startIdx = (header.includes('question') || header.includes('réponse') || header.includes('reponse') || header.includes('count') || header.includes('club')) ? 1 : 0;
 
@@ -697,7 +762,6 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
     const answerRows = [];
 
     for (let i = startIdx; i < lines.length; i++) {
-      // Parse CSV (handle quoted fields)
       const cols = [];
       let current = '', inQuotes = false;
       for (let j = 0; j < lines[i].length; j++) {
@@ -710,8 +774,6 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
 
       if (cols.length < 4) continue;
 
-      // Format: question_id, club, question, réponse, count, pourcentage
-      // Or: question, réponse, count, pourcentage (shorter)
       let qText, ansText, countVal, pctVal;
       if (cols.length >= 6) {
         qText = cols[2]; ansText = cols[3]; countVal = cols[4]; pctVal = cols[5];
@@ -726,11 +788,9 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
       if (text && count > 0) answerRows.push({ text, count, pct });
     }
 
-    // Use custom name if provided, fallback to CSV-detected question text
     if (custom_name) questionText = custom_name;
     if (!questionText || answerRows.length === 0) return res.status(400).json({ error: 'Aucune donnée valide trouvée dans le CSV' });
 
-    // Rescale counts to 100 if requested
     if (rescale) {
       const totalCount = answerRows.reduce((s, a) => s + a.count, 0);
       if (totalCount > 0) {
@@ -741,12 +801,10 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
       }
     }
 
-    // Sort by count desc
     answerRows.sort((a, b) => b.count - a.count);
 
     let tqId;
     if (replace_tq_id) {
-      // Replace existing question answers
       tqId = replace_tq_id;
       await db.clearTournageAnswers(tqId);
     } else {
