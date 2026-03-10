@@ -182,7 +182,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .q-card-text{font-size:13px;color:var(--text-light);line-height:1.4;overflow:hidden;text-overflow:ellipsis}
 .q-num{color:var(--text-gray);font-family:ui-monospace,monospace;font-size:12px}
 .q-card-meta{font-size:11px;color:var(--text-gray);margin-top:3px;font-family:ui-monospace,monospace}
-.q-card-count{font-size:18px;font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap;margin-left:12px}
+.q-card-right{display:flex;align-items:center;gap:8px;margin-left:12px}
+.q-card-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.q-card-header:hover .q-card-actions{opacity:1}
+.q-action-btn{background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;font-size:14px;padding:4px 6px;line-height:1;transition:all .15s}
+.q-action-btn:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15)}
+.q-del-btn:hover{background:rgba(255,50,50,.15);border-color:rgba(255,50,50,.3)}
+.q-card-count{font-size:18px;font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap}
 
 /* Card detail panel */
 .q-card-detail{padding:0 16px 16px;display:none}

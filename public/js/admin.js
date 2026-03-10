@@ -220,10 +220,35 @@
             '<div class="q-card-text"><span class="q-num">' + qNum + '.</span> ' + esc(q.text) + '</div>' +
             '<div class="q-card-meta">⏱ ' + avgLabel + ' moy. · ⏭ ' + skipLabel + ' skip' + (q.skip_count > 1 ? 's' : '') + rejLabel + variantLabel + '</div>' +
           '</div>' +
-          '<div class="q-card-count" style="color:' + countColor + '">' + displayCount + '<span style="color:#555;font-size:13px">/' + displayMax + '</span></div>' +
+          '<div class="q-card-right">' +
+            '<div class="q-card-actions">' +
+              '<button class="q-action-btn q-edit-btn" title="Modifier la question">✏️</button>' +
+              '<button class="q-action-btn q-del-btn" title="Supprimer la question">🗑️</button>' +
+            '</div>' +
+            '<div class="q-card-count" style="color:' + countColor + '">' + displayCount + '<span style="color:#555;font-size:13px">/' + displayMax + '</span></div>' +
+          '</div>' +
         '</div>' +
         '<div class="q-card-detail" id="detail-' + q.id + '"></div>';
-      card.querySelector('.q-card-header').onclick = () => toggleCard(q.id);
+      card.querySelector('.q-card-header').onclick = (e) => {
+        if (e.target.closest('.q-action-btn')) return;
+        toggleCard(q.id);
+      };
+      card.querySelector('.q-edit-btn').onclick = (e) => {
+        e.stopPropagation();
+        const newText = prompt('Modifier la question :', q.text);
+        if (newText && newText.trim() && newText.trim() !== q.text) {
+          api('/api/admin/questions/' + q.id, { method: 'PUT', body: JSON.stringify({ text: newText.trim(), category_id: q.category_id }) })
+            .then(() => loadAll());
+        }
+      };
+      card.querySelector('.q-del-btn').onclick = (e) => {
+        e.stopPropagation();
+        if (!confirm('Supprimer la question "' + q.text + '" et toutes ses réponses ?')) return;
+        api('/api/admin/questions/' + q.id, { method: 'DELETE' }).then(() => {
+          if (expandedId === q.id) expandedId = null;
+          loadAll();
+        });
+      };
       c.appendChild(card);
     });
     if (expandedId) loadDetail(expandedId);
