@@ -645,6 +645,15 @@ app.delete('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.post('/api/tournage/reorder', requireAdmin, async (req, res) => {
+  try {
+    const { ordered_ids } = req.body;
+    if (!Array.isArray(ordered_ids)) return res.status(400).json({ error: 'ordered_ids requis' });
+    await db.reorderTournageQuestions(ordered_ids);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 // CSV import for a tournage question
 app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit: '5mb' }), async (req, res) => {
   try {

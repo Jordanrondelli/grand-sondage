@@ -76,6 +76,7 @@ async function init() {
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS rejected_count INTEGER DEFAULT 0").catch(() => {});
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS response_time INTEGER").catch(() => {});
     await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS variant_group INTEGER DEFAULT NULL").catch(() => {});
+    await pool.query("ALTER TABLE tournage_questions ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0").catch(() => {});
   } else {
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
@@ -92,6 +93,7 @@ async function init() {
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN rejected_count INTEGER DEFAULT 0"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN response_time INTEGER"); } catch {}
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN variant_group INTEGER DEFAULT NULL"); } catch {}
+    try { sqlite.exec("ALTER TABLE tournage_questions ADD COLUMN sort_order INTEGER DEFAULT 0"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
@@ -456,7 +458,7 @@ async function updateCategory(id, name) {
 
 async function getTournageQuestions(catId) {
   const rows = await all(
-    "SELECT tq.id, tq.text, tq.category_id, (SELECT COUNT(*) FROM tournage_answers ta WHERE ta.tq_id = tq.id) as answer_count FROM tournage_questions tq WHERE tq.category_id = $1 ORDER BY tq.id",
+    "SELECT tq.id, tq.text, tq.category_id, tq.sort_order, (SELECT COUNT(*) FROM tournage_answers ta WHERE ta.tq_id = tq.id) as answer_count FROM tournage_questions tq WHERE tq.category_id = $1 ORDER BY tq.sort_order, tq.id",
     [catId]
   );
   return rows.map(r => ({ ...r, answer_count: Number(r.answer_count) }));
@@ -492,6 +494,12 @@ async function insertTournageAnswer(tqId, text, count, percentage) {
   await runNoReturn("INSERT INTO tournage_answers (tq_id, text, count, percentage) VALUES ($1, $2, $3, $4)", [tqId, text, count, percentage]);
 }
 
+async function reorderTournageQuestions(orderedIds) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    await runNoReturn("UPDATE tournage_questions SET sort_order = $1 WHERE id = $2", [i, orderedIds[i]]);
+  }
+}
+
 module.exports = {
   init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
@@ -503,6 +511,6 @@ module.exports = {
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
-  insertTournageQuestion, renameTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer,
+  insertTournageQuestion, renameTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer, reorderTournageQuestions,
   THRESHOLD,
 };

@@ -91,6 +91,10 @@
       const item = document.createElement('div');
       item.className = 'tq-item' + (currentTqId === q.id ? ' active' : '');
       item.innerHTML =
+        '<div class="tq-arrows">' +
+          '<button class="tq-arrow-up' + (i === 0 ? ' disabled' : '') + '" title="Monter">▲</button>' +
+          '<button class="tq-arrow-down' + (i === questions.length - 1 ? ' disabled' : '') + '" title="Descendre">▼</button>' +
+        '</div>' +
         '<span class="tq-num">' + (i + 1) + '</span>' +
         '<span class="tq-text">' + esc(q.text) + '</span>' +
         '<span class="tq-count">' + q.answer_count + ' rép.</span>' +
@@ -99,11 +103,24 @@
         '<button class="tq-delete" title="Supprimer">🗑️</button>';
       item.querySelector('.tq-text').onclick = () => selectQuestion(q.id);
       item.querySelector('.tq-num').onclick = () => selectQuestion(q.id);
+      item.querySelector('.tq-arrow-up').onclick = (e) => { e.stopPropagation(); moveQuestion(questions, i, -1); };
+      item.querySelector('.tq-arrow-down').onclick = (e) => { e.stopPropagation(); moveQuestion(questions, i, 1); };
       item.querySelector('.tq-rename').onclick = (e) => { e.stopPropagation(); renameQuestion(q.id, q.text); };
       item.querySelector('.tq-reimport').onclick = (e) => { e.stopPropagation(); startReimport(q.id); };
       item.querySelector('.tq-delete').onclick = (e) => { e.stopPropagation(); deleteQuestion(q.id, q.text); };
       list.appendChild(item);
     });
+  }
+
+  async function moveQuestion(questions, index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= questions.length) return;
+    const ids = questions.map(q => q.id);
+    const tmp = ids[index];
+    ids[index] = ids[newIndex];
+    ids[newIndex] = tmp;
+    await api('/api/tournage/reorder', { method: 'POST', body: JSON.stringify({ ordered_ids: ids }) });
+    await loadQuestions();
   }
 
   async function selectQuestion(tqId) {
