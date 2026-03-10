@@ -8,7 +8,7 @@
 
   const $ = id => document.getElementById(id);
   let categories = [], questions = [], bannedWords = [], corrections = [];
-  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false, searchQuery = '';
+  let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false, allowSkip = true, searchQuery = '';
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
   function vCount(n) { return videoMode ? Math.round(n / 10) : n; }
@@ -35,15 +35,16 @@
   // Load
   async function loadAll() {
     try {
-      const [sr, qr, cr, br, corr, amr, vmr] = await Promise.all([
+      const [sr, qr, cr, br, corr, amr, vmr, asr] = await Promise.all([
         api('/api/admin/stats'), api('/api/admin/questions'), api('/api/admin/categories'),
         api('/api/admin/banned-words'), api('/api/admin/corrections'), api('/api/admin/settings/auto-merge'),
-        api('/api/admin/settings/video-mode')
+        api('/api/admin/settings/video-mode'), api('/api/admin/settings/allow-skip')
       ]);
       const stats = await sr.json(); questions = await qr.json(); categories = await cr.json();
       bannedWords = await br.json(); corrections = await corr.json();
       const amData = await amr.json(); autoMerge = amData.enabled;
       const vmData = await vmr.json(); videoMode = vmData.enabled;
+      const asData = await asr.json(); allowSkip = asData.enabled;
       renderStats(stats);
       renderFilters();
       renderCards();
@@ -54,6 +55,7 @@
       renderCorrections();
       renderAutoMerge();
       renderVideoMode();
+      renderAllowSkip();
     } catch (e) { if (e.message !== 'unauth') console.error('loadAll error:', e); }
   }
 
@@ -376,6 +378,18 @@
     renderStats();
     renderCards();
     await api('/api/admin/settings/video-mode', { method: 'PUT', body: JSON.stringify({ enabled: videoMode }) });
+  };
+
+  // --- Allow Skip toggle ---
+  function renderAllowSkip() {
+    const btn = $('btn-allow-skip');
+    btn.textContent = allowSkip ? 'Activé' : 'Désactivé';
+    btn.className = 'toggle-btn ' + (allowSkip ? 'on' : 'off');
+  }
+  $('btn-allow-skip').onclick = async () => {
+    allowSkip = !allowSkip;
+    renderAllowSkip();
+    await api('/api/admin/settings/allow-skip', { method: 'PUT', body: JSON.stringify({ enabled: allowSkip }) });
   };
 
   // --- Banned Words ---

@@ -261,6 +261,8 @@ async function init() {
   // Seed settings
   const am = await getSetting('auto_merge');
   if (am === null) await setSetting('auto_merge', '1');
+  const as = await getSetting('allow_skip');
+  if (as === null) await setSetting('allow_skip', '1');
 }
 
 // --- Queries ---

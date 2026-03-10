@@ -277,8 +277,17 @@ app.post('/api/answers', rateLimit, async (req, res) => {
 
 app.post('/api/questions/:id/skip', rateLimit, async (req, res) => {
   try {
+    const allowSkip = await db.getSetting('allow_skip');
+    if (allowSkip === '0') return res.status(403).json({ error: 'Skip désactivé' });
     await db.incrementSkip(req.params.id);
     res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.get('/api/settings/allow-skip', async (req, res) => {
+  try {
+    const val = await db.getSetting('allow_skip');
+    res.json({ enabled: val !== '0' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
@@ -503,6 +512,21 @@ app.put('/api/admin/settings/video-mode', requireAdmin, async (req, res) => {
   try {
     const { enabled } = req.body;
     await db.setSetting('video_mode', enabled ? '1' : '0');
+    res.json({ ok: true, enabled: !!enabled });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.get('/api/admin/settings/allow-skip', requireAdmin, async (req, res) => {
+  try {
+    const val = await db.getSetting('allow_skip');
+    res.json({ enabled: val !== '0' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/settings/allow-skip', requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await db.setSetting('allow_skip', enabled ? '1' : '0');
     res.json({ ok: true, enabled: !!enabled });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });

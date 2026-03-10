@@ -7,7 +7,7 @@
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
-  let countdownTimer = null, countdownLeft = 15;
+  let countdownTimer = null, countdownLeft = 15, skipAllowed = true;
 
   const $ = id => document.getElementById(id);
   const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
@@ -392,6 +392,7 @@
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
       $('phase-confirm').style.display = 'none';
+      $('btn-skip').style.display = skipAllowed ? '' : 'none';
       show('question');
       input.focus();
       startTimer();
@@ -481,6 +482,12 @@
   // ============================================================
   // EVENTS
   // ============================================================
+  // Fetch skip setting
+  fetch('/api/settings/allow-skip').then(r => r.json()).then(d => {
+    skipAllowed = d.enabled;
+    $('btn-skip').style.display = skipAllowed ? '' : 'none';
+  }).catch(() => {});
+
   $('btn-start').addEventListener('click', () => {
     if (checks.every(Boolean) && countdownLeft <= 0) { updateAlready(); loadNext(); }
   });
