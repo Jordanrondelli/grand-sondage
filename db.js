@@ -199,6 +199,32 @@ async function init() {
     [catMap['La situation'], 11, "Qu'est ce qui te rend heureux dans la vie ?"],
     [catMap['La situation'], null, "Une insulte ? (courte)"],
     [catMap['La situation'], null, "Une drogue ou une addiction ? (légale ou illégale)"],
+    // --- V2 questions ---
+    // Le Glouton Club
+    [catMap['Le Glouton Club'], null, "[V2] Une variété de pâtes ?"],
+    [catMap['Le Glouton Club'], null, "[V2] Un ustensile de cuisine ?"],
+    [catMap['Le Glouton Club'], null, "[V2] Quelle est ta cuisine du monde préférée ? (pays d'origine)"],
+    [catMap['Le Glouton Club'], null, "[V2] Quel animal serais-tu curieux de goûter ?"],
+    [catMap['Le Glouton Club'], null, "[V2] Quelque choses que tu ne mangeras jamais pendant un date ?"],
+    [catMap['Le Glouton Club'], null, "[V2] Une spécialité culinaire française ? (plats principaux salés)"],
+    // Metronomus
+    [catMap['Metronomus'], null, "[V2] Un instrument de musique ?"],
+    [catMap['Metronomus'], null, "[V2] Un artiste musical cancel ?"],
+    [catMap['Metronomus'], null, "[V2] La soirée bat son plein, tu dois passer la prochaine musique, quel artiste va plaire à tout le monde ?"],
+    [catMap['Metronomus'], null, "[V2] L'artiste musical que vous mettez en fond pour baiser ?"],
+    [catMap['Metronomus'], null, "[V2] Une danse ?"],
+    [catMap['Metronomus'], null, "[V2] Quel youtubeur à fait la pire musique ?"],
+    // Red carpet
+    [catMap['Red carpet'], null, "[V2] Un genre de film ?"],
+    [catMap['Red carpet'], null, "[V2] Un méchant de film ?"],
+    [catMap['Red carpet'], null, "[V2] Une série (dessin animé ou réel) dont tu connais le générique par coeur ?"],
+    [catMap['Red carpet'], null, "[V2] L'émotion la plus dure à jouer ?"],
+    [catMap['Red carpet'], null, "[V2] Un chien populaire de films, séries ou dessins animés ?"],
+    [catMap['Red carpet'], null, "[V2] Un objet de film que tu aimerais avoir dans la vraie vie ?"],
+    // La situation
+    [catMap['La situation'], null, "[V2] Qu'est ce qui te rend heureux dans la vie ?"],
+    [catMap['La situation'], null, "[V2] Cite une insulte"],
+    [catMap['La situation'], null, "[V2] Cite une drogue/une addiction (légale ou illégale)"],
   ];
 
   for (const [catId, variantGroup, text] of seedQuestions) {
