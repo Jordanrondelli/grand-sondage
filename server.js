@@ -227,7 +227,8 @@ app.get('/api/questions/next', async (req, res) => {
     const q = await db.getAvailableQuestion(ex);
     if (!q) return res.json({ done: true });
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
-    res.json({ id: q.id, text: q.text, club: q.club, maxLength: isLong ? 200 : 40 });
+    const cleanText = q.text.replace(/^\[V2\]\s*/, '');
+    res.json({ id: q.id, text: cleanText, club: q.club, maxLength: isLong ? 200 : 40 });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 

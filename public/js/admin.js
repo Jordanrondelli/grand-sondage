@@ -84,6 +84,13 @@
     if (!activeFilter) all.style.cssText = 'background:#333;border-color:#333;color:#fff';
     all.onclick = () => { activeFilter = null; renderFilters(); renderCards(); };
     c.appendChild(all);
+    // V2 filter
+    const v2btn = document.createElement('button');
+    v2btn.className = 'pill' + (activeFilter === '__v2__' ? ' active' : '');
+    v2btn.textContent = '🔁 V2';
+    if (activeFilter === '__v2__') v2btn.style.cssText = 'background:#E94560;border-color:#E94560;color:#fff';
+    v2btn.onclick = () => { activeFilter = '__v2__'; renderFilters(); renderCards(); };
+    c.appendChild(v2btn);
     categories.forEach(cat => {
       const b = document.createElement('button');
       const club = CLUBS[cat.name] || { emoji: '', color: '#888' };
@@ -98,7 +105,7 @@
   // Cards
   function renderCards() {
     const c = $('q-cards'); c.innerHTML = '';
-    let filtered = activeFilter ? questions.filter(q => q.category_name === activeFilter) : questions;
+    let filtered = activeFilter === '__v2__' ? questions.filter(q => q.text.startsWith('[V2]')) : activeFilter ? questions.filter(q => q.category_name === activeFilter) : questions;
     if (searchQuery) filtered = filtered.filter(q => q.text.toLowerCase().includes(searchQuery));
     filtered.forEach((q, idx) => {
       const club = CLUBS[q.category_name] || { emoji: '', color: '#888' };
