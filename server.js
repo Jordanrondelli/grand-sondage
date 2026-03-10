@@ -188,10 +188,16 @@ function requireAdmin(req, res, next) {
   res.status(401).json({ error: 'Non autorisé' });
 }
 
-// --- Helper: get active survey ---
+// --- Helper: resolve survey ID from ?s= param or active survey ---
 async function getActiveSurveyId() {
   const s = await db.getActiveSurvey();
   return s ? s.id : null;
+}
+
+async function resolveSurveyId(req) {
+  if (req.query.s) return Number(req.query.s);
+  if (req.body?.survey_id) return Number(req.body.survey_id);
+  return getActiveSurveyId();
 }
 
 // --- Public API ---
@@ -200,7 +206,7 @@ const LONG_ANSWER_PATTERNS = ['réplique de film'];
 
 app.get('/api/questions/next', async (req, res) => {
   try {
-    const surveyId = await getActiveSurveyId();
+    const surveyId = await resolveSurveyId(req);
     if (!surveyId) return res.json({ done: true });
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
     const q = await db.getAvailableQuestion(surveyId, ex);
@@ -217,7 +223,7 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
-    const surveyId = await getActiveSurveyId();
+    const surveyId = await resolveSurveyId(req);
     if (!surveyId) return res.status(400).json({ error: 'Aucun sondage actif' });
 
     await refreshCache();
@@ -259,7 +265,7 @@ app.post('/api/questions/:id/skip', rateLimit, async (req, res) => {
   try {
     const allowSkip = await db.getSetting('allow_skip');
     if (allowSkip === '0') return res.status(403).json({ error: 'Skip désactivé' });
-    const surveyId = await getActiveSurveyId();
+    const surveyId = await resolveSurveyId(req);
     if (!surveyId) return res.status(400).json({ error: 'Aucun sondage actif' });
     await db.incrementSkip(surveyId, req.params.id);
     res.json({ ok: true });
@@ -275,7 +281,7 @@ app.get('/api/settings/allow-skip', async (req, res) => {
 
 app.get('/api/stats/participants', async (req, res) => {
   try {
-    const surveyId = await getActiveSurveyId();
+    const surveyId = await resolveSurveyId(req);
     res.json({ count: surveyId ? await db.getTotalParticipantCount(surveyId) : 0 });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });

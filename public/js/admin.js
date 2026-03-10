@@ -101,6 +101,32 @@
 
       c.appendChild(tab);
     });
+
+    // Show survey URL below tabs
+    let urlBox = $('survey-url-box');
+    if (!urlBox) {
+      urlBox = document.createElement('div');
+      urlBox.id = 'survey-url-box';
+      urlBox.className = 'survey-url-box';
+      $('survey-bar').parentNode.insertBefore(urlBox, $('survey-bar').nextSibling);
+    }
+    const currentSurvey = surveys.find(s => s.id === currentSurveyId);
+    if (currentSurvey) {
+      const base = window.location.origin;
+      const url = base + '/?s=' + currentSurvey.id;
+      urlBox.innerHTML = '<span class="survey-url-label">🔗 Lien du sondage "<strong>' + esc(currentSurvey.name) + '</strong>" :</span>' +
+        '<div class="survey-url-row">' +
+          '<input class="survey-url-input" id="survey-url-input" value="' + url + '" readonly>' +
+          '<button class="survey-url-copy" id="survey-url-copy" title="Copier">📋</button>' +
+        '</div>';
+      $('survey-url-copy').onclick = () => {
+        navigator.clipboard.writeText(url).then(() => {
+          $('survey-url-copy').textContent = '✅';
+          setTimeout(() => { $('survey-url-copy').textContent = '📋'; }, 1500);
+        });
+      };
+      $('survey-url-input').onclick = () => { $('survey-url-input').select(); };
+    }
   }
 
   $('btn-new-survey').onclick = async () => {

@@ -5,7 +5,12 @@
   const CLUB_HUES = { 'Le Glouton Club': 30, 'Metronomus': 280, 'Red carpet': 340, 'La situation': 180 };
   const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
 
-  const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
+  // Survey ID from URL ?s=<id> — each survey has its own localStorage
+  const surveyId = new URLSearchParams(window.location.search).get('s') || '';
+  const storageKey = surveyId ? 'answered_s' + surveyId : 'answered';
+  const apiSuffix = surveyId ? (url => url + (url.includes('?') ? '&' : '?') + 's=' + surveyId) : (url => url);
+
+  const answeredIds = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
   let countdownTimer = null, countdownLeft = 15, skipAllowed = true;
 
@@ -347,7 +352,7 @@
 
   async function loadParticipantCount() {
     try {
-      const res = await fetch('/api/stats/participants');
+      const res = await fetch(apiSuffix('/api/stats/participants'));
       const data = await res.json();
       if (data.count > 0) {
         $('participant-text').textContent = data.count.toLocaleString() + ' personnes ont déjà participé';
@@ -363,7 +368,7 @@
     stopTimer();
     setPulse(0);
     try {
-      const res = await fetch('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds])));
+      const res = await fetch(apiSuffix('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds]))));
       const data = await res.json();
       if (data.done) {
         $('done-text').textContent = answeredIds.size > 0
@@ -423,7 +428,7 @@
     if (!pendingAnswer || !currentQ) return;
     const rt = getResponseTime();
     try {
-      const resp = await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt }) });
+      const resp = await fetch(apiSuffix('/api/answers'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt, survey_id: surveyId ? Number(surveyId) : undefined }) });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         if (err.troll) {
@@ -440,7 +445,7 @@
       }
     } catch {}
     answeredIds.add(currentQ.id);
-    localStorage.setItem('answered', JSON.stringify([...answeredIds]));
+    localStorage.setItem(storageKey, JSON.stringify([...answeredIds]));
     updateAlready();
     pendingAnswer = null;
     // Gamification
@@ -471,9 +476,9 @@
   function skip() {
     stopTimer();
     if (currentQ) {
-      fetch('/api/questions/' + currentQ.id + '/skip', { method: 'POST' }).catch(() => {});
+      fetch(apiSuffix('/api/questions/' + currentQ.id + '/skip'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ survey_id: surveyId ? Number(surveyId) : undefined }) }).catch(() => {});
       answeredIds.add(currentQ.id);
-      localStorage.setItem('answered', JSON.stringify([...answeredIds]));
+      localStorage.setItem(storageKey, JSON.stringify([...answeredIds]));
       updateAlready();
     }
     loadNext();
@@ -483,7 +488,7 @@
   // EVENTS
   // ============================================================
   // Fetch skip setting
-  fetch('/api/settings/allow-skip').then(r => r.json()).then(d => {
+  fetch(apiSuffix('/api/settings/allow-skip')).then(r => r.json()).then(d => {
     skipAllowed = d.enabled;
     $('btn-skip').style.display = skipAllowed ? '' : 'none';
   }).catch(() => {});
