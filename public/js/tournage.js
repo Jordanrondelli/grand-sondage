@@ -17,6 +17,12 @@
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+  function setStatus(text, live) {
+    const el = $('regie-status');
+    el.textContent = text;
+    el.classList.toggle('live', !!live);
+  }
+
   async function api(url, opts) {
     const res = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts?.headers || {}) } });
     if (res.status === 401) { location.reload(); return; }
@@ -56,6 +62,7 @@
       const club = CLUBS[cat.name] || { emoji: '📋', color: '#888' };
       const btn = document.createElement('button');
       btn.className = 'club-btn' + (currentCatId === cat.id ? ' active' : '');
+      btn.style.setProperty('--club-color', club.color);
       if (currentCatId === cat.id) btn.style.borderColor = club.color;
       btn.innerHTML = '<span class="club-btn-emoji">' + club.emoji + '</span><span>' + esc(cat.name) + '</span>';
       btn.onclick = () => selectClub(cat);
@@ -69,8 +76,10 @@
     renderClubs();
     await api('/api/tournage/set-club', { method: 'POST', body: JSON.stringify({ club: cat.name }) });
     await loadQuestions();
-    $('questions-section').style.display = '';
+    $('questions-panel').style.display = '';
     $('answer-section').style.display = 'none';
+    $('empty-state').style.display = '';
+    setStatus(cat.name);
   }
 
   // --- Questions list ---
@@ -134,12 +143,15 @@
     $('action-buttons').style.display = 'none';
     renderAnswerGrid();
     $('answer-section').style.display = '';
+    $('empty-state').style.display = 'none';
+    setStatus(data.question.text);
     await loadQuestions(); // refresh active state
   }
 
   function renderAnswerGrid() {
     const grid = $('answers-grid');
     grid.innerHTML = '';
+    $('answers-count').textContent = currentAnswers.length + ' réponses';
     currentAnswers.forEach((a, i) => {
       const scoreColor = a.percentage <= 5 ? '#4ADE80' : a.percentage <= 15 ? '#FBBF24' : '#F87171';
       const btn = document.createElement('button');
@@ -161,16 +173,15 @@
     $('custom-answer-input').value = a.text;
     api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: a.text, score: a.count }) });
     $('action-buttons').style.display = '';
+    setStatus('📺 ' + a.text.toUpperCase(), true);
   }
 
   // --- Custom answer input ---
   function findMatchInPanel(text) {
     const t = text.toLowerCase().trim();
     if (!t) return null;
-    // Exact match first
     let match = currentAnswers.find(a => a.text.toLowerCase() === t);
     if (match) return match;
-    // Then check if typed text contains a panel answer or vice-versa
     match = currentAnswers.find(a => {
       const at = a.text.toLowerCase();
       return at.includes(t) || t.includes(at);
@@ -191,6 +202,7 @@
     }
     api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: text, score: selectedAnswer.score }) });
     $('action-buttons').style.display = '';
+    setStatus('📺 ' + text.toUpperCase(), true);
   };
 
   $('custom-answer-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-show-answer').click(); });
@@ -199,13 +211,16 @@
   $('btn-reveal-score').onclick = () => {
     if (selectedAnswer && selectedAnswer.score != null) {
       api('/api/tournage/reveal-score', { method: 'POST', body: JSON.stringify({}) });
+      setStatus('🎯 Score: ' + selectedAnswer.score, true);
     } else {
       api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
+      setStatus('❌ Hors panel', true);
     }
   };
 
   $('btn-hors-panel').onclick = () => {
     api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
+    setStatus('❌ Hors panel', true);
   };
 
   $('btn-reset-display').onclick = () => {
@@ -214,6 +229,7 @@
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
     api('/api/tournage/reset', { method: 'POST', body: JSON.stringify({}) });
     $('action-buttons').style.display = 'none';
+    setStatus('En attente');
   };
 
   // --- CSV Import ---
@@ -233,7 +249,6 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       pendingCsv = ev.target.result;
-      // Pre-fill name with filename without extension
       const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
       $('modal-name-input').value = baseName;
       $('modal-info').textContent = 'Fichier : ' + file.name + ' (' + Math.round(file.size / 1024) + ' Ko)';
@@ -283,6 +298,7 @@
     if (currentTqId === tqId) {
       currentTqId = null;
       $('answer-section').style.display = 'none';
+      $('empty-state').style.display = '';
     }
     await loadQuestions();
   }

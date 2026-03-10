@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tournage — Régie</title>
   <link rel="stylesheet" href="/css/style.css?v=6">
-  <link rel="stylesheet" href="/css/tournage.css?v=6">
+  <link rel="stylesheet" href="/css/tournage.css?v=7">
 </head>
 <body>
   <div id="screen-login" class="screen active">
@@ -19,43 +19,84 @@
   </div>
 
   <div id="screen-control" class="screen" style="display:none">
-    <div class="control-wrap">
-      <div class="control-header">
-        <h1>🎬 Régie</h1>
-        <a href="/tournage/display" target="_blank" class="btn-open-display">📺 Ouvrir l'affichage</a>
+    <!-- Top bar -->
+    <div class="regie-topbar">
+      <div class="regie-topbar-left">
+        <span class="regie-logo">🎬</span>
+        <span class="regie-title">Régie</span>
+        <span class="regie-status" id="regie-status">En attente</span>
       </div>
-
-      <!-- Categories -->
-      <div class="control-section">
-        <div class="control-label">Club</div>
-        <div class="club-selector" id="club-selector"></div>
+      <div class="regie-topbar-right">
+        <a href="/tournage/display" target="_blank" class="regie-btn-display">
+          <span class="regie-btn-display-dot"></span>
+          Ouvrir l'écran plateau
+        </a>
       </div>
+    </div>
 
-      <!-- Questions list for selected category -->
-      <div class="control-section" id="questions-section" style="display:none">
-        <div class="control-label">Questions importées</div>
-        <div class="tq-list" id="tq-list"></div>
-        <button class="btn-import" id="btn-import-csv">📥 Importer une question (CSV)</button>
-        <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none">
-      </div>
-
-      <!-- Selected question: answer input + panel -->
-      <div class="control-section" id="answer-section" style="display:none">
-        <div class="control-label" id="selected-q-label">Réponse</div>
-
-        <div class="custom-answer-row">
-          <input class="custom-answer-input" id="custom-answer-input" placeholder="Écrire la réponse du joueur...">
-          <button class="btn-custom-send" id="btn-show-answer">📺 Afficher</button>
+    <!-- Main layout -->
+    <div class="regie-layout">
+      <!-- Left panel: clubs + questions -->
+      <div class="regie-left">
+        <div class="regie-panel">
+          <div class="regie-panel-header">Clubs</div>
+          <div class="club-grid" id="club-selector"></div>
         </div>
 
-        <div class="action-buttons" id="action-buttons" style="display:none">
-          <button class="btn-reveal" id="btn-reveal-score">🎯 Dévoiler le score</button>
-          <button class="btn-hors-panel" id="btn-hors-panel">❌ Hors panel</button>
-          <button class="btn-reset-display" id="btn-reset-display">🔄 Reset</button>
+        <div class="regie-panel" id="questions-panel" style="display:none">
+          <div class="regie-panel-header">
+            <span>Questions</span>
+            <button class="regie-btn-import" id="btn-import-csv">+ Importer CSV</button>
+          </div>
+          <div class="tq-list" id="tq-list"></div>
+          <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none">
+        </div>
+      </div>
+
+      <!-- Right panel: active question + answers + controls -->
+      <div class="regie-right">
+        <div class="regie-panel regie-active-panel" id="answer-section" style="display:none">
+          <!-- Question header -->
+          <div class="regie-q-header">
+            <div class="regie-q-label">Question active</div>
+            <div class="regie-q-title" id="selected-q-label"></div>
+          </div>
+
+          <!-- Answer input row -->
+          <div class="regie-answer-input-row">
+            <input class="regie-answer-input" id="custom-answer-input" placeholder="Écrire la réponse du joueur...">
+            <button class="regie-btn-send" id="btn-show-answer">Afficher</button>
+          </div>
+
+          <!-- Action bar -->
+          <div class="regie-actions" id="action-buttons" style="display:none">
+            <button class="regie-btn-action regie-btn-reveal" id="btn-reveal-score">
+              <span class="regie-btn-icon">🎯</span>
+              Dévoiler le score
+            </button>
+            <button class="regie-btn-action regie-btn-hors" id="btn-hors-panel">
+              <span class="regie-btn-icon">✕</span>
+              Hors panel
+            </button>
+            <button class="regie-btn-action regie-btn-reset" id="btn-reset-display">
+              <span class="regie-btn-icon">↺</span>
+              Reset
+            </button>
+          </div>
+
+          <!-- Answers grid -->
+          <div class="regie-answers-header">
+            <span>Réponses du panel</span>
+            <span class="regie-answers-count" id="answers-count"></span>
+          </div>
+          <div class="regie-answers-grid" id="answers-grid"></div>
         </div>
 
-        <div class="control-label" style="margin-top:20px">Réponses du panel</div>
-        <div class="answers-grid" id="answers-grid"></div>
+        <!-- Empty state when no question selected -->
+        <div class="regie-panel regie-empty-state" id="empty-state">
+          <div class="regie-empty-icon">📋</div>
+          <div class="regie-empty-text">Sélectionnez un club puis une question pour commencer</div>
+        </div>
       </div>
     </div>
   </div>
@@ -77,6 +118,6 @@
     </div>
   </div>
 
-  <script src="/js/tournage.js?v=7"></script>
+  <script src="/js/tournage.js?v=8"></script>
 </body>
 </html>
