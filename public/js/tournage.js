@@ -100,18 +100,21 @@
       const item = document.createElement('div');
       item.className = 'tq-item' + (currentTqId === q.id ? ' active' : '');
       item.innerHTML =
-        '<div class="tq-arrows">' +
-          '<button class="tq-arrow-up' + (i === 0 ? ' disabled' : '') + '" title="Monter">▲</button>' +
-          '<button class="tq-arrow-down' + (i === questions.length - 1 ? ' disabled' : '') + '" title="Descendre">▼</button>' +
+        '<div class="tq-row-main">' +
+          '<span class="tq-num">' + (i + 1) + '</span>' +
+          '<span class="tq-text">' + esc(q.text) + '</span>' +
         '</div>' +
-        '<span class="tq-num">' + (i + 1) + '</span>' +
-        '<span class="tq-text">' + esc(q.text) + '</span>' +
-        '<span class="tq-count">' + q.answer_count + ' rép.</span>' +
-        '<button class="tq-rename" title="Renommer">✏️</button>' +
-        '<button class="tq-reimport" title="Réimporter CSV">🔄</button>' +
-        '<button class="tq-delete" title="Supprimer">🗑️</button>';
-      item.querySelector('.tq-text').onclick = () => selectQuestion(q.id);
-      item.querySelector('.tq-num').onclick = () => selectQuestion(q.id);
+        '<div class="tq-row-meta">' +
+          '<span class="tq-count">' + q.answer_count + ' rép.</span>' +
+          '<div class="tq-tools">' +
+            '<button class="tq-arrow-up' + (i === 0 ? ' disabled' : '') + '" title="Monter">▲</button>' +
+            '<button class="tq-arrow-down' + (i === questions.length - 1 ? ' disabled' : '') + '" title="Descendre">▼</button>' +
+            '<button class="tq-rename" title="Renommer">✏️</button>' +
+            '<button class="tq-reimport" title="Réimporter CSV">🔄</button>' +
+            '<button class="tq-delete" title="Supprimer">🗑️</button>' +
+          '</div>' +
+        '</div>';
+      item.querySelector('.tq-row-main').onclick = () => selectQuestion(q.id);
       item.querySelector('.tq-arrow-up').onclick = (e) => { e.stopPropagation(); moveQuestion(questions, i, -1); };
       item.querySelector('.tq-arrow-down').onclick = (e) => { e.stopPropagation(); moveQuestion(questions, i, 1); };
       item.querySelector('.tq-rename').onclick = (e) => { e.stopPropagation(); renameQuestion(q.id, q.text); };
@@ -152,13 +155,17 @@
     const grid = $('answers-grid');
     grid.innerHTML = '';
     $('answers-count').textContent = currentAnswers.length + ' réponses';
+    const maxPct = Math.max(...currentAnswers.map(a => a.percentage || 0), 1);
     currentAnswers.forEach((a, i) => {
       const scoreColor = a.percentage <= 5 ? '#4ADE80' : a.percentage <= 15 ? '#FBBF24' : '#F87171';
+      const barW = Math.max(2, ((a.percentage || 0) / maxPct) * 100);
       const btn = document.createElement('button');
       btn.className = 'answer-btn';
       btn.innerHTML =
+        '<div class="answer-bar" style="width:' + barW + '%;background:' + scoreColor + '"></div>' +
         '<span class="answer-btn-rank">#' + (i + 1) + '</span>' +
         '<span class="answer-btn-text">' + esc(a.text) + '</span>' +
+        '<span class="answer-btn-pct">' + (a.percentage != null ? a.percentage + '%' : '') + '</span>' +
         '<span class="answer-btn-score" style="color:' + scoreColor + '">' + a.count + '</span>';
       btn.onclick = () => triggerPanelAnswer(a, btn);
       grid.appendChild(btn);
