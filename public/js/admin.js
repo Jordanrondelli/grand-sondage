@@ -53,12 +53,12 @@
       const tab = document.createElement('div');
       tab.className = 'survey-tab' + (currentSurveyId === s.id ? ' active' : '') + (s.active ? ' is-active-survey' : '');
       let html = '';
-      if (s.active) html += '<span class="survey-active-dot" title="Sondage actif (visible par les répondants)"></span>';
+      if (s.active) html += '<span class="survey-active-dot" title="Sondage actif (lien accessible)"></span>';
       html += '<span>' + esc(s.name) + '</span>';
       html += '<span class="survey-tab-actions">';
-      if (!s.active) html += '<button class="survey-activate-btn" title="Activer ce sondage">📡</button>';
+      html += '<button class="survey-toggle-btn" title="' + (s.active ? 'Désactiver' : 'Activer') + ' ce sondage">' + (s.active ? '🔴' : '📡') + '</button>';
       html += '<button class="survey-rename-btn" title="Renommer">✏️</button>';
-      if (!s.active && surveys.length > 1) html += '<button class="survey-delete-btn" title="Supprimer">🗑️</button>';
+      if (surveys.length > 1) html += '<button class="survey-delete-btn" title="Supprimer">🗑️</button>';
       html += '</span>';
       tab.innerHTML = html;
 
@@ -70,14 +70,12 @@
         loadAll();
       });
 
-      const activateBtn = tab.querySelector('.survey-activate-btn');
-      if (activateBtn) {
-        activateBtn.onclick = async (e) => {
-          e.stopPropagation();
-          await api('/api/admin/surveys/' + s.id + '/activate', { method: 'POST' });
-          await loadSurveys();
-        };
-      }
+      tab.querySelector('.survey-toggle-btn').onclick = async (e) => {
+        e.stopPropagation();
+        const endpoint = s.active ? '/api/admin/surveys/' + s.id + '/deactivate' : '/api/admin/surveys/' + s.id + '/activate';
+        await api(endpoint, { method: 'POST' });
+        await loadSurveys();
+      };
 
       tab.querySelector('.survey-rename-btn').onclick = (e) => {
         e.stopPropagation();
@@ -92,7 +90,8 @@
       if (deleteBtn) {
         deleteBtn.onclick = async (e) => {
           e.stopPropagation();
-          if (!confirm('Supprimer le sondage "' + s.name + '" et toutes ses réponses ?')) return;
+          if (s.active && !confirm('Ce sondage est actif ! Supprimer quand même "' + s.name + '" et toutes ses réponses ?')) return;
+          if (!s.active && !confirm('Supprimer le sondage "' + s.name + '" et toutes ses réponses ?')) return;
           await api('/api/admin/surveys/' + s.id, { method: 'DELETE' });
           if (currentSurveyId === s.id) currentSurveyId = null;
           await loadSurveys();
@@ -114,7 +113,10 @@
     if (currentSurvey) {
       const base = window.location.origin;
       const url = base + '/?s=' + currentSurvey.id;
-      urlBox.innerHTML = '<span class="survey-url-label">🔗 Lien du sondage "<strong>' + esc(currentSurvey.name) + '</strong>" :</span>' +
+      const statusHtml = currentSurvey.active
+        ? '<span class="survey-url-status on">ACTIF</span>'
+        : '<span class="survey-url-status off">INACTIF</span>';
+      urlBox.innerHTML = '<span class="survey-url-label">🔗 Lien du sondage "<strong>' + esc(currentSurvey.name) + '</strong>" ' + statusHtml + '</span>' +
         '<div class="survey-url-row">' +
           '<input class="survey-url-input" id="survey-url-input" value="' + url + '" readonly>' +
           '<button class="survey-url-copy" id="survey-url-copy" title="Copier">📋</button>' +
@@ -126,6 +128,8 @@
         });
       };
       $('survey-url-input').onclick = () => { $('survey-url-input').select(); };
+    } else {
+      urlBox.innerHTML = '';
     }
   }
 

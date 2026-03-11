@@ -160,6 +160,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .survey-url-input{flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 10px;color:#fff;font-size:13px;font-family:ui-monospace,monospace;outline:none}
 .survey-url-copy{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;transition:all .15s}
 .survey-url-copy:hover{background:rgba(255,255,255,.15)}
+.survey-url-status{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;margin-left:6px;letter-spacing:.5px;vertical-align:middle}
+.survey-url-status.on{background:var(--green);color:#000}
+.survey-url-status.off{background:#555;color:#ccc}
 
 .setting-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px}
 .toggle-label{font-size:12px;color:var(--text-gray)}

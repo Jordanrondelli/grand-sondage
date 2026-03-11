@@ -195,8 +195,14 @@ async function getActiveSurveyId() {
 }
 
 async function resolveSurveyId(req) {
-  if (req.query.s) return Number(req.query.s);
-  if (req.body?.survey_id) return Number(req.body.survey_id);
+  const explicit = req.query.s || req.body?.survey_id;
+  if (explicit) {
+    const id = Number(explicit);
+    // Verify the survey exists and is active
+    const all = await db.getAllSurveys();
+    const survey = all.find(s => s.id === id);
+    return (survey && survey.active) ? id : null;
+  }
   return getActiveSurveyId();
 }
 
@@ -341,13 +347,17 @@ app.post('/api/admin/surveys/:id/activate', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.post('/api/admin/surveys/:id/deactivate', requireAdmin, async (req, res) => {
+  try {
+    await db.deactivateSurvey(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 app.delete('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
   try {
-    // Don't allow deleting the last survey
     const surveys = await db.getAllSurveys();
     if (surveys.length <= 1) return res.status(400).json({ error: 'Impossible de supprimer le dernier sondage' });
-    const survey = surveys.find(s => s.id === Number(req.params.id));
-    if (survey?.active) return res.status(400).json({ error: 'Impossible de supprimer le sondage actif' });
     await db.deleteSurvey(req.params.id);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }

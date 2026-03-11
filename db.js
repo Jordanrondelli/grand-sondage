@@ -328,8 +328,11 @@ async function renameSurvey(id, name) {
 }
 
 async function activateSurvey(id) {
-  await runNoReturn("UPDATE surveys SET active = 0");
   await runNoReturn("UPDATE surveys SET active = 1 WHERE id = $1", [id]);
+}
+
+async function deactivateSurvey(id) {
+  await runNoReturn("UPDATE surveys SET active = 0 WHERE id = $1", [id]);
 }
 
 async function deleteSurvey(id) {
@@ -679,7 +682,7 @@ module.exports = {
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
   // Survey management
-  getAllSurveys, getActiveSurvey, createSurvey, renameSurvey, activateSurvey, deleteSurvey,
+  getAllSurveys, getActiveSurvey, createSurvey, renameSurvey, activateSurvey, deactivateSurvey, deleteSurvey,
   getSurveyQuestionIds, addQuestionToSurvey, removeQuestionFromSurvey, duplicateQuestionsToSurvey,
   // Tournage
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
