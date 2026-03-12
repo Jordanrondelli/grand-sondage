@@ -393,6 +393,45 @@ app.delete('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+// Update survey slug
+app.put('/api/admin/surveys/:id/slug', requireAdmin, async (req, res) => {
+  try {
+    const slug = (req.body.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (slug && slug.length < 2) return res.status(400).json({ error: 'Slug trop court (min 2 caractères)' });
+    // Check uniqueness
+    if (slug) {
+      const existing = await db.getSurveyBySlug(slug);
+      if (existing && existing.id !== Number(req.params.id)) return res.status(400).json({ error: 'Ce slug est déjà utilisé' });
+    }
+    await db.updateSurveySlug(req.params.id, slug || null);
+    res.json({ ok: true, slug: slug || null });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// Reset demographics for respondents (bumps demo_version)
+app.post('/api/admin/surveys/:id/reset-demo', requireAdmin, async (req, res) => {
+  try {
+    await db.bumpDemoVersion(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// Public: get survey info (demo_version) for a survey
+app.get('/api/survey-info', async (req, res) => {
+  try {
+    const slug = req.query.slug;
+    const id = req.query.s;
+    let survey = null;
+    if (slug) survey = await db.getSurveyBySlug(slug);
+    else if (id) {
+      const all = await db.getAllSurveys();
+      survey = all.find(s => s.id === Number(id));
+    }
+    if (!survey) return res.json({ error: 'not_found' });
+    res.json({ id: survey.id, demo_version: survey.demo_version || 1 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Add/remove questions from a survey
 app.post('/api/admin/surveys/:id/questions', requireAdmin, async (req, res) => {
   try {
@@ -902,6 +941,15 @@ app.post('/api/tournage/set-club', requireAdmin, (req, res) => {
 
 app.get('/tournage', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'tournage.html')); });
 app.get('/tournage/display', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'tournage-display.html')); });
+
+// Slug route: /:slug serves the survey — must be LAST to not shadow other routes
+app.get('/:slug', async (req, res, next) => {
+  // Skip if it looks like a file request or known route
+  if (req.params.slug.includes('.') || ['admin', 'tournage', 'health'].includes(req.params.slug)) return next();
+  const survey = await db.getSurveyBySlug(req.params.slug);
+  if (!survey) return next();
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 db.init().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
