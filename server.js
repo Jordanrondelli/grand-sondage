@@ -217,14 +217,11 @@ async function getActiveSurveyId() {
 
 async function resolveSurveyId(req) {
   const explicit = req.query.s || req.body?.survey_id;
-  if (explicit) {
-    const id = Number(explicit);
-    if (isNaN(id)) return null;
-    const surveys = await db.getAllSurveys();
-    const survey = surveys.find(s => s.id === id);
-    return (survey && !!Number(survey.active)) ? id : null;
-  }
-  return getActiveSurveyId();
+  if (!explicit) return null; // No survey ID = reject (no silent fallback)
+  const id = Number(explicit);
+  if (isNaN(id)) return null;
+  const survey = await db.getSurveyById(id);
+  return (survey && !!Number(survey.active)) ? id : null;
 }
 
 // --- Public API ---
