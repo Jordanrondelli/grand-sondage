@@ -164,6 +164,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .survey-url-status.on{background:var(--green);color:#000}
 .survey-url-status.off{background:#555;color:#ccc}
 
+.btn-survey-toggle{border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:.3px}
+.btn-survey-activate{background:var(--green);color:#fff;box-shadow:0 0 16px rgba(34,197,94,.4)}
+.btn-survey-activate:hover{background:#1db04f;box-shadow:0 0 24px rgba(34,197,94,.5)}
+.btn-survey-deactivate{background:var(--danger);color:#fff;box-shadow:0 0 16px rgba(239,68,68,.3)}
+.btn-survey-deactivate:hover{background:#d93a3a;box-shadow:0 0 24px rgba(239,68,68,.4)}
+
 .demo-stats-row{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:12px;justify-content:center}
 .demo-stat{font-size:12px;color:var(--text-gray);background:rgba(255,255,255,.04);padding:4px 10px;border-radius:8px}
 .representative-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}

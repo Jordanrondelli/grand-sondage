@@ -199,9 +199,9 @@ async function resolveSurveyId(req) {
   if (explicit) {
     const id = Number(explicit);
     // Verify the survey exists and is active
-    const all = await db.getAllSurveys();
-    const survey = all.find(s => s.id === id);
-    return (survey && survey.active) ? id : null;
+    const surveys = await db.getAllSurveys();
+    const survey = surveys.find(s => s.id === id);
+    return (survey && Number(survey.active) === 1) ? id : null;
   }
   return getActiveSurveyId();
 }

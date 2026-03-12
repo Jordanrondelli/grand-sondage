@@ -129,6 +129,23 @@
         });
       };
       $('survey-url-input').onclick = () => { $('survey-url-input').select(); };
+
+      // Big activate/deactivate button
+      const toggleRow = document.createElement('div');
+      toggleRow.style.cssText = 'margin-top:10px;text-align:center';
+      if (currentSurvey.active) {
+        toggleRow.innerHTML = '<button class="btn-survey-toggle btn-survey-deactivate">🔴 Désactiver ce sondage</button>';
+      } else {
+        toggleRow.innerHTML = '<button class="btn-survey-toggle btn-survey-activate">🟢 Activer ce sondage</button>';
+      }
+      urlBox.appendChild(toggleRow);
+      toggleRow.querySelector('.btn-survey-toggle').onclick = async () => {
+        const endpoint = currentSurvey.active
+          ? '/api/admin/surveys/' + currentSurvey.id + '/deactivate'
+          : '/api/admin/surveys/' + currentSurvey.id + '/activate';
+        await api(endpoint, { method: 'POST' });
+        await loadSurveys();
+      };
     } else {
       urlBox.innerHTML = '';
     }
