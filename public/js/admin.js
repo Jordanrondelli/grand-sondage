@@ -518,7 +518,7 @@
     // Per-question CSV export
     $('export-q-' + id).onclick = (e) => {
       e.stopPropagation();
-      window.location.href = '/api/admin/questions/' + id + '/export?survey_id=' + currentSurveyId;
+      window.location.href = '/api/admin/questions/' + id + '/export?survey_id=' + currentSurveyId + (representativeMode ? '&filter=representative' : '');
     };
 
     // Answer editing
@@ -725,7 +725,7 @@
   $('correction-right').addEventListener('keydown', e => { if (e.key === 'Enter') addCorrection(); });
 
   // Export
-  $('btn-export').onclick = () => { window.location.href = '/api/admin/export?survey_id=' + currentSurveyId; };
+  $('btn-export').onclick = () => { window.location.href = '/api/admin/export?survey_id=' + currentSurveyId + (representativeMode ? '&filter=representative' : ''); };
   // Tournage
   $('btn-tournage').onclick = () => { window.open('/tournage', '_blank'); };
 

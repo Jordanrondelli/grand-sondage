@@ -665,6 +665,41 @@ async function getAllAnswersForExport(surveyId) {
   return rows.map(r => ({ ...r, count: Number(r.count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null }));
 }
 
+async function getAllAnswersForExportRepresentative(surveyId) {
+  const qids = await getSurveyQuestionIds(surveyId);
+  const results = [];
+  for (const qid of qids) {
+    const ids = await getRepresentativeAnswerIds(surveyId, qid, GENDER_QUOTA);
+    if (!ids.length) continue;
+    let rows;
+    if (isPostgres) {
+      rows = await all(
+        `SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count,
+          COALESCE((SELECT sqs.skip_count FROM survey_question_stats sqs WHERE sqs.survey_id = $2 AND sqs.question_id = q.id), 0) as skip_count,
+          (SELECT ROUND(AVG(a2.response_time)) FROM answers a2 WHERE a2.question_id = q.id AND a2.survey_id = $2 AND a2.response_time IS NOT NULL AND a2.age >= 18 AND a2.gender IS NOT NULL) as avg_time
+        FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id
+        WHERE a.id = ANY($1::int[])
+        GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text))
+        ORDER BY count DESC`,
+        [ids, surveyId]
+      );
+    } else {
+      rows = await all(
+        `SELECT q.id as question_id, c.name as club, q.text as question, LOWER(TRIM(a.text)) as answer, COUNT(*) as count,
+          COALESCE((SELECT sqs.skip_count FROM survey_question_stats sqs WHERE sqs.survey_id = ? AND sqs.question_id = q.id), 0) as skip_count,
+          (SELECT ROUND(AVG(a2.response_time)) FROM answers a2 WHERE a2.question_id = q.id AND a2.survey_id = ? AND a2.response_time IS NOT NULL AND a2.age >= 18 AND a2.gender IS NOT NULL) as avg_time
+        FROM answers a JOIN questions q ON q.id = a.question_id JOIN categories c ON c.id = q.category_id
+        WHERE a.id IN (SELECT value FROM json_each(?))
+        GROUP BY q.id, c.name, q.text, LOWER(TRIM(a.text))
+        ORDER BY count DESC`,
+        [surveyId, surveyId, JSON.stringify(ids)]
+      );
+    }
+    results.push(...rows.map(r => ({ ...r, count: Number(r.count), skip_count: Number(r.skip_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null })));
+  }
+  return results;
+}
+
 async function getSetting(key) {
   const row = await get("SELECT value FROM settings WHERE key = $1", [key]);
   return row ? row.value : null;
@@ -820,7 +855,7 @@ module.exports = {
   init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount, getGenderAdultCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
   getAnswersGrouped, getAnswersGroupedRepresentative, getStats, insertQuestion, updateQuestion,
-  deleteQuestion, mergeAnswers, getAllAnswersForExport,
+  deleteQuestion, mergeAnswers, getAllAnswersForExport, getAllAnswersForExportRepresentative,
   deleteAllAnswersForSurvey, insertCategory, updateCategory,
   getBannedWords, addBannedWord, deleteBannedWord,
   getCorrections, addCorrection, deleteCorrection,
