@@ -501,7 +501,7 @@
   $('btn-start').addEventListener('click', () => {
     if (checks.every(Boolean) && countdownLeft <= 0) {
       updateAlready();
-      if (demographics) { show('reminder'); } else { show('demographics'); }
+      if (demographics) { show('reminder'); startReminderCountdown(); } else { show('demographics'); }
     }
   });
 
@@ -511,18 +511,35 @@
   (function initDemoScreen() {
     let selectedGender = null;
     const genderBtns = document.querySelectorAll('.demo-gender-btn');
-    const ageSelect = $('demo-age');
+    const ageInput = $('demo-age');
+    const ageError = $('demo-age-error');
     const startBtn = $('btn-demo-start');
 
-    // Build age dropdown
-    ageSelect.innerHTML = '<option value="" disabled selected>Ton âge</option>';
-    for (let a = 10; a <= 77; a++) {
-      ageSelect.innerHTML += '<option value="' + a + '">' + a + ' ans</option>';
+    function getValidAge() {
+      const val = ageInput.value.trim();
+      if (!/^\d{2}$/.test(val)) return null;
+      const n = Number(val);
+      return (n >= 10 && n <= 77) ? n : null;
     }
 
     function updateDemoBtn() {
-      startBtn.classList.toggle('disabled', !selectedGender || !ageSelect.value);
+      const ageOk = getValidAge() !== null;
+      startBtn.classList.toggle('disabled', !selectedGender || !ageOk);
+      if (ageInput.value.trim() && !ageOk) {
+        ageError.textContent = 'Entre un âge valide (2 chiffres, entre 10 et 77)';
+      } else {
+        ageError.textContent = '';
+      }
     }
+
+    // Only allow digits
+    ageInput.addEventListener('input', () => {
+      ageInput.value = ageInput.value.replace(/[^0-9]/g, '');
+      updateDemoBtn();
+    });
+    ageInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); startBtn.click(); }
+    });
 
     genderBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -532,17 +549,40 @@
         updateDemoBtn();
       });
     });
-    ageSelect.addEventListener('change', updateDemoBtn);
 
     startBtn.addEventListener('click', () => {
-      if (!selectedGender || !ageSelect.value) return;
-      demographics = { gender: selectedGender, age: Number(ageSelect.value) };
+      const age = getValidAge();
+      if (!selectedGender || !age) return;
+      demographics = { gender: selectedGender, age: age };
       localStorage.setItem(demoKey, JSON.stringify(demographics));
       show('reminder');
+      startReminderCountdown();
     });
   })();
 
+  // ============================================================
+  // REMINDER COUNTDOWN
+  // ============================================================
+  let reminderTimer = null;
+  function startReminderCountdown() {
+    let left = 10;
+    const btn = $('btn-reminder-go');
+    btn.classList.add('disabled');
+    btn.textContent = 'Lis bien... (' + left + ')';
+    reminderTimer = setInterval(() => {
+      left--;
+      if (left <= 0) {
+        clearInterval(reminderTimer);
+        btn.classList.remove('disabled');
+        btn.textContent = 'J\'ai compris, c\'est parti !';
+      } else {
+        btn.textContent = 'Lis bien... (' + left + ')';
+      }
+    }, 1000);
+  }
+
   $('btn-reminder-go').addEventListener('click', () => {
+    if ($('btn-reminder-go').classList.contains('disabled')) return;
     loadNext();
   });
 

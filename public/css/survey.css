@@ -187,9 +187,10 @@ body{
 .demo-gender-btn{flex:1;padding:14px;font-size:16px;font-weight:700;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.12);border-radius:14px;color:#fff;cursor:pointer;transition:all 0.2s;font-family:'Nunito',sans-serif}
 .demo-gender-btn:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.25)}
 .demo-gender-btn.selected{background:linear-gradient(135deg,#9B8FFF 0%,#C4B5FD 100%);border-color:#9B8FFF;color:#fff;box-shadow:0 4px 20px rgba(155,143,255,0.3)}
-.demo-age-select{width:100%;padding:14px 16px;font-size:16px;font-weight:600;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.12);border-radius:14px;color:#fff;cursor:pointer;font-family:'Nunito',sans-serif;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' fill='none' stroke-width='2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center}
-.demo-age-select:focus{border-color:#9B8FFF;outline:none}
-.demo-age-select option{background:#1a1a2e;color:#fff}
+.demo-age-input{width:100%;padding:14px 16px;font-size:24px;font-weight:700;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.12);border-radius:14px;color:#fff;font-family:'Nunito',sans-serif;text-align:center;letter-spacing:4px;outline:none}
+.demo-age-input::placeholder{font-size:14px;font-weight:400;letter-spacing:0;color:rgba(255,255,255,0.3)}
+.demo-age-input:focus{border-color:#9B8FFF}
+.demo-age-error{font-size:12px;color:#FF6B8A;margin-top:6px;min-height:18px;text-align:center}
 
 /* ===== REMINDER ===== */
 .reminder-emoji{font-size:56px;margin-bottom:16px;text-align:center}

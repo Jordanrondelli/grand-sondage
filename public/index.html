@@ -80,8 +80,9 @@
       </div>
 
       <div class="demo-section anim-slideup" style="animation-delay:0.3s">
-        <label class="demo-label">Ton âge</label>
-        <select class="demo-age-select" id="demo-age"></select>
+        <label class="demo-label">Quel est ton &acirc;ge ?</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" class="demo-age-input" id="demo-age" placeholder="Ex : 24" maxlength="2" autocomplete="off">
+        <p class="demo-age-error" id="demo-age-error"></p>
       </div>
 
       <div class="anim-slideup" style="animation-delay:0.4s">
@@ -103,7 +104,7 @@
         </p>
       </div>
       <div class="anim-slideup" style="animation-delay:0.35s">
-        <button class="btn-primary" id="btn-reminder-go">J'ai compris, c'est parti !</button>
+        <button class="btn-primary disabled" id="btn-reminder-go">Lis bien...</button>
       </div>
     </div>
   </div>
