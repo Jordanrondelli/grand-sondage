@@ -13,9 +13,12 @@
   const answeredIds = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
   let countdownTimer = null, countdownLeft = 15, skipAllowed = true;
+  // Demographics (stored per-survey in localStorage, sent with every answer)
+  const demoKey = surveyId ? 'demo_s' + surveyId : 'demo';
+  let demographics = JSON.parse(localStorage.getItem(demoKey) || 'null'); // { gender, age }
 
   const $ = id => document.getElementById(id);
-  const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
+  const screens = ['welcome', 'demographics', 'question', 'registered', 'timeout', 'done'];
 
   function show(name) {
     screens.forEach(s => $('screen-' + s).classList.remove('active'));
@@ -428,7 +431,7 @@
     if (!pendingAnswer || !currentQ) return;
     const rt = getResponseTime();
     try {
-      const resp = await fetch(apiSuffix('/api/answers'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt, survey_id: surveyId ? Number(surveyId) : undefined }) });
+      const resp = await fetch(apiSuffix('/api/answers'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt, survey_id: surveyId ? Number(surveyId) : undefined, gender: demographics?.gender, age: demographics?.age }) });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         if (err.troll) {
@@ -494,8 +497,49 @@
   }).catch(() => {});
 
   $('btn-start').addEventListener('click', () => {
-    if (checks.every(Boolean) && countdownLeft <= 0) { updateAlready(); loadNext(); }
+    if (checks.every(Boolean) && countdownLeft <= 0) {
+      updateAlready();
+      if (demographics) { loadNext(); } else { show('demographics'); }
+    }
   });
+
+  // ============================================================
+  // DEMOGRAPHICS
+  // ============================================================
+  (function initDemoScreen() {
+    let selectedGender = null;
+    const genderBtns = document.querySelectorAll('.demo-gender-btn');
+    const ageSelect = $('demo-age');
+    const startBtn = $('btn-demo-start');
+
+    // Build age dropdown
+    ageSelect.innerHTML = '<option value="" disabled selected>Ton âge</option>';
+    for (let a = 10; a <= 77; a++) {
+      ageSelect.innerHTML += '<option value="' + a + '">' + a + ' ans</option>';
+    }
+
+    function updateDemoBtn() {
+      startBtn.classList.toggle('disabled', !selectedGender || !ageSelect.value);
+    }
+
+    genderBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        genderBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedGender = btn.dataset.gender;
+        updateDemoBtn();
+      });
+    });
+    ageSelect.addEventListener('change', updateDemoBtn);
+
+    startBtn.addEventListener('click', () => {
+      if (!selectedGender || !ageSelect.value) return;
+      demographics = { gender: selectedGender, age: Number(ageSelect.value) };
+      localStorage.setItem(demoKey, JSON.stringify(demographics));
+      loadNext();
+    });
+  })();
+
   $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });
   $('btn-confirm-yes').addEventListener('click', confirmSubmit);

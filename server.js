@@ -31,8 +31,8 @@ function normalizeAnswer(text) {
     .replace(/[^a-zà-ÿ0-9\s''\-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  // Strip leading articles (repeat to catch chained: "de la mon")
-  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une |mon |ma |mes |ton |ta |tes |son |sa |ses |c'est |je dirais |je dis |j'aime |j'adore )/i, '').trim();
+  // Strip leading articles only (keep possessifs: mon, ta, son, etc.)
+  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une |c'est |je dirais |je dis |j'aime |j'adore )/i, '').trim();
   s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une )/i, '').trim();
   // Strip trailing filler
   s = s.replace(/\s+(lol|mdr|haha|xd|ptdr|bien sur|evidemment|je pense|je crois|perso|personnellement|quoi|en vrai|genre)$/i, '').trim();
@@ -225,7 +225,7 @@ app.get('/api/questions/next', async (req, res) => {
 
 app.post('/api/answers', rateLimit, async (req, res) => {
   try {
-    const { question_id, text, response_time } = req.body;
+    const { question_id, text, response_time, gender, age } = req.body;
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
@@ -251,8 +251,9 @@ app.post('/api/answers', rateLimit, async (req, res) => {
 
     // No auto-corrections — keep raw normalized answer
 
+    const threshold = await db.getSurveyThreshold(surveyId);
     const count = await db.getAnswerCount(surveyId, question_id);
-    if (count >= db.THRESHOLD)
+    if (count >= threshold)
       return res.status(410).json({ error: 'Complet' });
 
     // Fuzzy match against existing answers (if enabled)
@@ -262,7 +263,11 @@ app.post('/api/answers', rateLimit, async (req, res) => {
       if (match) normalized = match;
     }
 
-    await db.insertAnswer(surveyId, question_id, normalized, rt);
+    // Validate and pass demographics
+    const validGender = (gender === 'homme' || gender === 'femme') ? gender : null;
+    const validAge = (typeof age === 'number' && age >= 10 && age <= 77) ? age : null;
+
+    await db.insertAnswer(surveyId, question_id, normalized, rt, validGender, validAge);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -384,8 +389,17 @@ app.delete('/api/admin/surveys/:surveyId/questions/:questionId', requireAdmin, a
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
     const surveyId = req.query.survey_id;
-    if (!surveyId) return res.json({ totalAnswers: 0, completeQuestions: 0, totalQuestions: 0, threshold: db.THRESHOLD });
+    if (!surveyId) return res.json({ totalAnswers: 0, completeQuestions: 0, totalQuestions: 0, threshold: db.DEFAULT_THRESHOLD });
     res.json(await db.getStats(Number(surveyId)));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/surveys/:id/threshold', requireAdmin, async (req, res) => {
+  try {
+    const { threshold } = req.body;
+    if (!threshold || threshold < 1 || threshold > 100000) return res.status(400).json({ error: 'Seuil invalide' });
+    await db.setSurveyThreshold(req.params.id, threshold);
+    res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
@@ -448,10 +462,18 @@ app.delete('/api/admin/questions/:id', requireAdmin, async (req, res) => {
 app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
   try {
     const surveyId = req.query.survey_id;
+    const filter = req.query.filter; // 'representative' or undefined
     if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
+    let rawAnswers;
+    if (filter === 'representative') {
+      const threshold = await db.getSurveyThreshold(Number(surveyId));
+      const maxPerGender = Math.floor(threshold / 2);
+      rawAnswers = await db.getAnswersGroupedRepresentative(Number(surveyId), req.params.id, maxPerGender);
+    } else {
+      rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
+    }
 
     // Fuzzy-cluster similar answers for display
     const clustered = [];

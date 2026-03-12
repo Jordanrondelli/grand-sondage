@@ -164,6 +164,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .survey-url-status.on{background:var(--green);color:#000}
 .survey-url-status.off{background:#555;color:#ccc}
 
+.demo-stats-row{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:12px;justify-content:center}
+.demo-stat{font-size:12px;color:var(--text-gray);background:rgba(255,255,255,.04);padding:4px 10px;border-radius:8px}
+.threshold-edit-btn{background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;vertical-align:middle}
+.representative-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+
 .setting-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px}
 .toggle-label{font-size:12px;color:var(--text-gray)}
 .toggle-btn{border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;color:#fff;transition:background .2s}

@@ -80,11 +80,14 @@ async function init() {
 
     // --- Multi-survey tables ---
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS surveys (id SERIAL PRIMARY KEY, name TEXT NOT NULL, active INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS surveys (id SERIAL PRIMARY KEY, name TEXT NOT NULL, active INTEGER DEFAULT 0, threshold INTEGER DEFAULT 1000, created_at TIMESTAMP DEFAULT NOW());
       CREATE TABLE IF NOT EXISTS survey_questions (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, PRIMARY KEY (survey_id, question_id));
     `);
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS survey_id INTEGER REFERENCES surveys(id)").catch(() => {});
     await pool.query("CREATE INDEX IF NOT EXISTS idx_answers_survey ON answers(survey_id)").catch(() => {});
+    await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS threshold INTEGER DEFAULT 1000").catch(() => {});
+    await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS gender TEXT").catch(() => {});
+    await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS age INTEGER").catch(() => {});
     // Per-survey stats for skip/rejected per question
     await pool.query(`
       CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id));
@@ -109,12 +112,15 @@ async function init() {
 
     // --- Multi-survey tables ---
     sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS surveys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, active INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS surveys (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, active INTEGER DEFAULT 0, threshold INTEGER DEFAULT 1000, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS survey_questions (survey_id INTEGER NOT NULL, question_id INTEGER NOT NULL, PRIMARY KEY (survey_id, question_id), FOREIGN KEY (survey_id) REFERENCES surveys(id) ON DELETE CASCADE, FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE);
       CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL, question_id INTEGER NOT NULL, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id), FOREIGN KEY (survey_id) REFERENCES surveys(id) ON DELETE CASCADE, FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE);
     `);
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN survey_id INTEGER REFERENCES surveys(id)"); } catch {}
     try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_answers_survey ON answers(survey_id)"); } catch {}
+    try { sqlite.exec("ALTER TABLE surveys ADD COLUMN threshold INTEGER DEFAULT 1000"); } catch {}
+    try { sqlite.exec("ALTER TABLE answers ADD COLUMN gender TEXT"); } catch {}
+    try { sqlite.exec("ALTER TABLE answers ADD COLUMN age INTEGER"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
@@ -307,7 +313,16 @@ async function init() {
 
 // --- Queries ---
 
-const THRESHOLD = 1000;
+const DEFAULT_THRESHOLD = 1000;
+
+async function getSurveyThreshold(surveyId) {
+  const row = await get("SELECT threshold FROM surveys WHERE id = $1", [surveyId]);
+  return row ? (row.threshold || DEFAULT_THRESHOLD) : DEFAULT_THRESHOLD;
+}
+
+async function setSurveyThreshold(surveyId, threshold) {
+  await runNoReturn("UPDATE surveys SET threshold = $1 WHERE id = $2", [threshold, surveyId]);
+}
 
 // --- Survey management ---
 
@@ -369,7 +384,8 @@ async function duplicateQuestionsToSurvey(fromSurveyId, toSurveyId) {
 
 // --- Question queries (survey-scoped) ---
 
-function getAvailableQuestion(surveyId, excludeIds) {
+async function getAvailableQuestion(surveyId, excludeIds) {
+  const threshold = await getSurveyThreshold(surveyId);
   if (isPostgres) {
     return all(
       `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
@@ -382,7 +398,7 @@ function getAvailableQuestion(surveyId, excludeIds) {
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($3::int[])
          ))
        ORDER BY RANDOM() LIMIT 1`,
-      [surveyId, THRESHOLD, excludeIds]
+      [surveyId, threshold, excludeIds]
     ).then(rows => rows[0] || null);
   } else {
     return Promise.resolve(sqlite.prepare(
@@ -396,12 +412,12 @@ function getAvailableQuestion(surveyId, excludeIds) {
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
          ))
        ORDER BY RANDOM() LIMIT 1`
-    ).get(surveyId, surveyId, THRESHOLD, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
+    ).get(surveyId, surveyId, threshold, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
   }
 }
 
-async function insertAnswer(surveyId, qid, text, responseTime) {
-  await runNoReturn("INSERT INTO answers (survey_id, question_id, text, response_time) VALUES ($1, $2, $3, $4)", [surveyId, qid, text, responseTime || null]);
+async function insertAnswer(surveyId, qid, text, responseTime, gender, age) {
+  await runNoReturn("INSERT INTO answers (survey_id, question_id, text, response_time, gender, age) VALUES ($1, $2, $3, $4, $5, $6)", [surveyId, qid, text, responseTime || null, gender || null, age || null]);
 }
 
 async function incrementSkip(surveyId, qid) {
@@ -459,24 +475,67 @@ async function getQuestionById(id) {
   return get("SELECT q.*, c.name as category_name FROM questions q JOIN categories c ON c.id = q.category_id WHERE q.id = $1", [id]);
 }
 
-async function getAnswersGrouped(surveyId, qid) {
+async function getAnswersGrouped(surveyId, qid, filter) {
+  let where = "question_id = $1 AND survey_id = $2";
+  if (filter === 'representative') {
+    // 18+ only, then balanced 50/50 H/F via subquery
+    where += " AND age >= 18 AND gender IS NOT NULL";
+  }
   const rows = await all(
-    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE question_id = $1 AND survey_id = $2 GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
+    "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE " + where + " GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
     [qid, surveyId]
   );
   return rows.map(r => ({ ...r, count: Number(r.count) }));
 }
 
+// Get answer IDs for representative sample: 50/50 H/F, 18+ only, random selection
+async function getRepresentativeAnswerIds(surveyId, qid, maxPerGender) {
+  const maleIds = await all(
+    "SELECT id FROM answers WHERE survey_id = $1 AND question_id = $2 AND age >= 18 AND gender = 'homme' ORDER BY RANDOM() LIMIT $3",
+    [surveyId, qid, maxPerGender]
+  );
+  const femaleIds = await all(
+    "SELECT id FROM answers WHERE survey_id = $1 AND question_id = $2 AND age >= 18 AND gender = 'femme' ORDER BY RANDOM() LIMIT $3",
+    [surveyId, qid, maxPerGender]
+  );
+  return [...maleIds.map(r => r.id), ...femaleIds.map(r => r.id)];
+}
+
+async function getAnswersGroupedRepresentative(surveyId, qid, maxPerGender) {
+  const ids = await getRepresentativeAnswerIds(surveyId, qid, maxPerGender);
+  if (!ids.length) return [];
+  let rows;
+  if (isPostgres) {
+    rows = await all(
+      "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE id = ANY($1::int[]) GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
+      [ids]
+    );
+  } else {
+    rows = await all(
+      "SELECT LOWER(TRIM(text)) as normalized, MIN(text) as sample_text, COUNT(*) as count FROM answers WHERE id IN (SELECT value FROM json_each($1)) GROUP BY LOWER(TRIM(text)) ORDER BY count DESC",
+      [JSON.stringify(ids)]
+    );
+  }
+  return rows.map(r => ({ ...r, count: Number(r.count) }));
+}
+
 async function getStats(surveyId) {
+  const threshold = await getSurveyThreshold(surveyId);
   const totalAnswers = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1", [surveyId])).c);
   const sqIds = await getSurveyQuestionIds(surveyId);
   let completeQuestions = 0;
   for (const qid of sqIds) {
     const cnt = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2", [qid, surveyId])).c);
-    if (cnt >= THRESHOLD) completeQuestions++;
+    if (cnt >= threshold) completeQuestions++;
   }
   const totalQuestions = sqIds.length;
-  return { totalAnswers, completeQuestions, totalQuestions, threshold: THRESHOLD };
+  // Demographics breakdown
+  const genderRows = await all("SELECT gender, COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender IS NOT NULL GROUP BY gender", [surveyId]);
+  const genderCounts = {};
+  genderRows.forEach(r => { genderCounts[r.gender] = Number(r.c); });
+  const minorCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age < 18", [surveyId])).c);
+  const adultCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age >= 18", [surveyId])).c);
+  return { totalAnswers, completeQuestions, totalQuestions, threshold, genderCounts, minorCount, adultCount };
 }
 
 async function insertQuestion(catId, text, variantGroup) {
@@ -674,18 +733,19 @@ async function reorderTournageQuestions(orderedIds) {
 module.exports = {
   init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
-  getAnswersGrouped, getStats, insertQuestion, updateQuestion,
+  getAnswersGrouped, getAnswersGroupedRepresentative, getStats, insertQuestion, updateQuestion,
   deleteQuestion, mergeAnswers, getAllAnswersForExport,
   deleteAllAnswersForSurvey, insertCategory, updateCategory,
   getBannedWords, addBannedWord, deleteBannedWord,
   getCorrections, addCorrection, deleteCorrection,
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
+  getSurveyThreshold, setSurveyThreshold,
   // Survey management
   getAllSurveys, getActiveSurvey, createSurvey, renameSurvey, activateSurvey, deactivateSurvey, deleteSurvey,
   getSurveyQuestionIds, addQuestionToSurvey, removeQuestionFromSurvey, duplicateQuestionsToSurvey,
   // Tournage
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
   insertTournageQuestion, renameTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer, reorderTournageQuestions,
-  THRESHOLD,
+  DEFAULT_THRESHOLD,
 };

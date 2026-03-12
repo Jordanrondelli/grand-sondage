@@ -10,6 +10,8 @@
   let categories = [], questions = [], bannedWords = [], corrections = [], surveys = [];
   let activeFilter = null, editorClub = null, expandedId = null, autoMerge = true, videoMode = false, allowSkip = true, searchQuery = '';
   let currentSurveyId = null; // the survey being viewed in admin
+  let representativeMode = false;
+  let currentThreshold = 1000;
 
   function show(id) { $('screen-login').classList.remove('active'); $('screen-dashboard').classList.remove('active'); $(id).classList.add('active'); }
   function vCount(n) { return videoMode ? Math.round(n / 10) : n; }
@@ -190,12 +192,39 @@
   function renderStats(s) {
     if (s) lastStats = s; else s = lastStats;
     if (!s) return;
+    currentThreshold = s.threshold || 1000;
     $('s-total').textContent = vCount(s.totalAnswers);
     $('s-complete').textContent = s.completeQuestions + '/' + s.totalQuestions;
     const pct = s.totalQuestions > 0 ? Math.round((s.completeQuestions / s.totalQuestions) * 100) : 0;
     $('s-pct').textContent = pct + '%';
     $('s-pct').style.color = pct >= 100 ? '#22C55E' : '#F59E0B';
+    $('s-threshold').textContent = videoMode ? Math.round(currentThreshold / 10) : currentThreshold;
+    // Demographics
+    const gc = s.genderCounts || {};
+    $('ds-hommes').textContent = '👨 ' + (gc.homme || 0) + ' hommes';
+    $('ds-femmes').textContent = '👩 ' + (gc.femme || 0) + ' femmes';
+    $('ds-adults').textContent = '🔞 ' + (s.adultCount || 0) + ' adultes (18+)';
+    $('ds-minors').textContent = '👶 ' + (s.minorCount || 0) + ' mineurs';
   }
+
+  // Threshold editor
+  $('btn-edit-threshold').onclick = async (e) => {
+    e.stopPropagation();
+    const val = prompt('Nombre de réponses attendues par question :', currentThreshold);
+    if (!val) return;
+    const n = parseInt(val);
+    if (isNaN(n) || n < 1) return;
+    await api('/api/admin/surveys/' + currentSurveyId + '/threshold', { method: 'PUT', body: JSON.stringify({ threshold: n }) });
+    loadAll();
+  };
+
+  // Representative mode toggle
+  $('btn-representative').onclick = () => {
+    representativeMode = !representativeMode;
+    $('btn-representative').textContent = representativeMode ? 'ON' : 'OFF';
+    $('btn-representative').className = 'toggle-btn ' + (representativeMode ? 'on' : 'off');
+    if (expandedId) loadDetail(expandedId);
+  };
 
   // Filters
   function renderFilters() {
@@ -234,9 +263,9 @@
       const card = document.createElement('div');
       card.className = 'q-card' + (expandedId === q.id ? ' open' : '');
       const displayCount = vCount(q.answer_count);
-      const displayMax = videoMode ? 100 : 1000;
-      const thresholdFull = videoMode ? 100 : 1000;
-      const thresholdMid = videoMode ? 50 : 500;
+      const displayMax = videoMode ? Math.round(currentThreshold / 10) : currentThreshold;
+      const thresholdFull = displayMax;
+      const thresholdMid = Math.round(displayMax / 2);
       const countColor = displayCount >= thresholdFull ? '#22C55E' : displayCount > thresholdMid ? '#F59E0B' : '#888';
       const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
       const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
@@ -292,7 +321,8 @@
   }
 
   async function loadDetail(id) {
-    const r = await api('/api/admin/questions/' + id + '/answers?survey_id=' + currentSurveyId);
+    const filterParam = representativeMode ? '&filter=representative' : '';
+    const r = await api('/api/admin/questions/' + id + '/answers?survey_id=' + currentSurveyId + filterParam);
     const data = await r.json();
     const det = $('detail-' + id);
     if (!det) return;
