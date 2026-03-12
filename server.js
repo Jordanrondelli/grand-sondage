@@ -259,10 +259,8 @@ app.post('/api/answers', rateLimit, async (req, res) => {
 
     // Check gender quota for adults (minors always pass)
     if (validGender && validAge && validAge >= 18) {
-      const threshold = await db.getSurveyThreshold(surveyId);
-      const genderQuota = Math.floor(threshold / 2);
       const genderCount = await db.getGenderAdultCount(surveyId, question_id, validGender);
-      if (genderCount >= genderQuota)
+      if (genderCount >= db.GENDER_QUOTA)
         return res.status(410).json({ error: 'Complet' });
     }
 
@@ -395,17 +393,8 @@ app.delete('/api/admin/surveys/:surveyId/questions/:questionId', requireAdmin, a
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
     const surveyId = req.query.survey_id;
-    if (!surveyId) return res.json({ totalAnswers: 0, completeQuestions: 0, totalQuestions: 0, threshold: db.DEFAULT_THRESHOLD });
+    if (!surveyId) return res.json({ totalAnswers: 0, completeQuestions: 0, totalQuestions: 0, genderQuota: db.GENDER_QUOTA });
     res.json(await db.getStats(Number(surveyId)));
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
-});
-
-app.put('/api/admin/surveys/:id/threshold', requireAdmin, async (req, res) => {
-  try {
-    const { threshold } = req.body;
-    if (!threshold || threshold < 1 || threshold > 100000) return res.status(400).json({ error: 'Seuil invalide' });
-    await db.setSurveyThreshold(req.params.id, threshold);
-    res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
@@ -474,9 +463,7 @@ app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
     if (!question) return res.status(404).json({ error: 'Introuvable' });
     let rawAnswers;
     if (filter === 'representative') {
-      const threshold = await db.getSurveyThreshold(Number(surveyId));
-      const maxPerGender = Math.floor(threshold / 2);
-      rawAnswers = await db.getAnswersGroupedRepresentative(Number(surveyId), req.params.id, maxPerGender);
+      rawAnswers = await db.getAnswersGroupedRepresentative(Number(surveyId), req.params.id, db.GENDER_QUOTA);
     } else {
       rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
     }

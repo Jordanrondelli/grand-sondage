@@ -313,16 +313,7 @@ async function init() {
 
 // --- Queries ---
 
-const DEFAULT_THRESHOLD = 1000;
-
-async function getSurveyThreshold(surveyId) {
-  const row = await get("SELECT threshold FROM surveys WHERE id = $1", [surveyId]);
-  return row ? (row.threshold || DEFAULT_THRESHOLD) : DEFAULT_THRESHOLD;
-}
-
-async function setSurveyThreshold(surveyId, threshold) {
-  await runNoReturn("UPDATE surveys SET threshold = $1 WHERE id = $2", [threshold, surveyId]);
-}
+const GENDER_QUOTA = 500; // 500 hommes 18+ + 500 femmes 18+ = 1000 par question
 
 // --- Survey management ---
 
@@ -387,8 +378,6 @@ async function duplicateQuestionsToSurvey(fromSurveyId, toSurveyId) {
 // Gender quota per question: threshold/2 adult men + threshold/2 adult women = complete
 // Minors can always answer (their answers don't count toward quota)
 async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
-  const threshold = await getSurveyThreshold(surveyId);
-  const genderQuota = Math.floor(threshold / 2);
   const isAdult = age && age >= 18;
 
   // For adults: only show questions where their gender quota isn't full
@@ -416,7 +405,7 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($3::int[])
          ))
        ORDER BY RANDOM() LIMIT 1`,
-      [surveyId, null/*unused*/, excludeIds, gender || '', genderQuota]
+      [surveyId, null/*unused*/, excludeIds, gender || '', GENDER_QUOTA]
     ).then(rows => rows[0] || null);
   } else {
     if (isAdult && gender) {
@@ -431,7 +420,7 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
              SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
            ))
          ORDER BY RANDOM() LIMIT 1`
-      ).get(surveyId, surveyId, gender, genderQuota, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
+      ).get(surveyId, surveyId, gender, GENDER_QUOTA, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
     } else {
       return Promise.resolve(sqlite.prepare(
         `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
@@ -447,7 +436,7 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
              SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
            ))
          ORDER BY RANDOM() LIMIT 1`
-      ).get(surveyId, surveyId, genderQuota, surveyId, genderQuota, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
+      ).get(surveyId, surveyId, GENDER_QUOTA, surveyId, GENDER_QUOTA, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
     }
   }
 }
@@ -562,15 +551,13 @@ async function getAnswersGroupedRepresentative(surveyId, qid, maxPerGender) {
 }
 
 async function getStats(surveyId) {
-  const threshold = await getSurveyThreshold(surveyId);
-  const genderQuota = Math.floor(threshold / 2);
   const totalAnswers = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1", [surveyId])).c);
   const sqIds = await getSurveyQuestionIds(surveyId);
   let completeQuestions = 0;
   for (const qid of sqIds) {
     const maleAdult = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2 AND gender = 'homme' AND age >= 18", [qid, surveyId])).c);
     const femaleAdult = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2 AND gender = 'femme' AND age >= 18", [qid, surveyId])).c);
-    if (maleAdult >= genderQuota && femaleAdult >= genderQuota) completeQuestions++;
+    if (maleAdult >= GENDER_QUOTA && femaleAdult >= GENDER_QUOTA) completeQuestions++;
   }
   const totalQuestions = sqIds.length;
   // Demographics breakdown
@@ -581,7 +568,7 @@ async function getStats(surveyId) {
   const adultCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age >= 18", [surveyId])).c);
   const adultMale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'homme' AND age >= 18", [surveyId])).c);
   const adultFemale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'femme' AND age >= 18", [surveyId])).c);
-  return { totalAnswers, completeQuestions, totalQuestions, threshold, genderQuota, genderCounts, minorCount, adultCount, adultMale, adultFemale };
+  return { totalAnswers, completeQuestions, totalQuestions, genderQuota: GENDER_QUOTA, genderCounts, minorCount, adultCount, adultMale, adultFemale };
 }
 
 async function insertQuestion(catId, text, variantGroup) {
@@ -786,12 +773,11 @@ module.exports = {
   getCorrections, addCorrection, deleteCorrection,
   getSetting, setSetting, getExistingAnswers,
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
-  getSurveyThreshold, setSurveyThreshold,
+  GENDER_QUOTA,
   // Survey management
   getAllSurveys, getActiveSurvey, createSurvey, renameSurvey, activateSurvey, deactivateSurvey, deleteSurvey,
   getSurveyQuestionIds, addQuestionToSurvey, removeQuestionFromSurvey, duplicateQuestionsToSurvey,
   // Tournage
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
   insertTournageQuestion, renameTournageQuestion, deleteTournageQuestion, clearTournageAnswers, insertTournageAnswer, reorderTournageQuestions,
-  DEFAULT_THRESHOLD,
 };
