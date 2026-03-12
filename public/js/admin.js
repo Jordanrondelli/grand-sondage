@@ -220,6 +220,9 @@
     $('ds-femmes').textContent = '👩 ' + (s.adultFemale || 0) + '/' + GENDER_QUOTA + ' femmes 18+ (total: ' + (gc.femme || 0) + ')';
     $('ds-adults').textContent = '🎯 Objectif: ' + GENDER_QUOTA + 'H + ' + GENDER_QUOTA + 'F adultes par question';
     $('ds-minors').textContent = '👶 ' + (s.minorCount || 0) + ' mineurs (non comptés)';
+    if (s.noDemoCount > 0) {
+      $('ds-minors').textContent += '  |  ⚠️ ' + s.noDemoCount + ' réponses sans démographie (anciennes)';
+    }
   }
 
   // Representative mode toggle

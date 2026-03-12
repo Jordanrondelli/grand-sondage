@@ -570,7 +570,8 @@ async function getStats(surveyId) {
   const adultCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age >= 18", [surveyId])).c);
   const adultMale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'homme' AND age >= 18", [surveyId])).c);
   const adultFemale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'femme' AND age >= 18", [surveyId])).c);
-  return { totalAnswers, completeQuestions, totalQuestions, genderQuota: GENDER_QUOTA, genderCounts, minorCount, adultCount, adultMale, adultFemale };
+  const noDemoCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND (age IS NULL OR gender IS NULL)", [surveyId])).c);
+  return { totalAnswers, completeQuestions, totalQuestions, genderQuota: GENDER_QUOTA, genderCounts, minorCount, adultCount, adultMale, adultFemale, noDemoCount };
 }
 
 async function insertQuestion(catId, text, variantGroup) {
