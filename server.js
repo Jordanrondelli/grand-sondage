@@ -254,7 +254,7 @@ app.get('/api/questions/next', async (req, res) => {
 
 app.post('/api/answers', rateLimit, async (req, res) => {
   try {
-    const { question_id, text, response_time, gender, age } = req.body;
+    const { question_id, text, response_time, gender, age, respondent_id } = req.body;
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
@@ -292,7 +292,9 @@ app.post('/api/answers', rateLimit, async (req, res) => {
     }
 
     // Auto-merge disabled — store raw answer as-is
-    await db.insertAnswer(surveyId, question_id, normalized, rt, validGender, validAge);
+    // Validate respondent_id format (should be a UUID-like string)
+    const rid = (typeof respondent_id === 'string' && respondent_id.length >= 10 && respondent_id.length <= 50) ? respondent_id : null;
+    await db.insertAnswer(surveyId, question_id, normalized, rt, validGender, validAge, rid);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
