@@ -113,7 +113,8 @@
     const currentSurvey = surveys.find(s => s.id === currentSurveyId);
     if (currentSurvey) {
       const base = window.location.origin;
-      const url = base + '/?s=' + currentSurvey.id;
+      const surveySlug = currentSurvey.slug;
+      const url = surveySlug ? base + '/' + surveySlug : base + '/?s=' + currentSurvey.id;
       const statusHtml = currentSurvey.active
         ? '<span class="survey-url-status on">ACTIF</span>'
         : '<span class="survey-url-status off">INACTIF</span>';
@@ -121,7 +122,15 @@
         '<div class="survey-url-row">' +
           '<input class="survey-url-input" id="survey-url-input" value="' + url + '" readonly>' +
           '<button class="survey-url-copy" id="survey-url-copy" title="Copier">📋</button>' +
-        '</div>';
+        '</div>' +
+        '<div class="survey-slug-row" style="margin-top:8px;display:flex;align-items:center;gap:6px">' +
+          '<label style="font-size:0.85em;color:#aaa">Slug :</label>' +
+          '<span style="font-size:0.85em;color:#666">' + base + '/</span>' +
+          '<input class="survey-slug-input" id="survey-slug-input" value="' + (surveySlug || '') + '" placeholder="mon-sondage" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-size:0.9em">' +
+          '<button class="btn-slug-save" id="btn-slug-save" style="padding:6px 12px;border-radius:8px;background:#6366f1;color:#fff;border:none;cursor:pointer;font-size:0.85em">Enregistrer</button>' +
+        '</div>' +
+        '<div class="survey-actions-row" style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"></div>';
+
       $('survey-url-copy').onclick = () => {
         navigator.clipboard.writeText(url).then(() => {
           $('survey-url-copy').textContent = '✅';
@@ -130,22 +139,48 @@
       };
       $('survey-url-input').onclick = () => { $('survey-url-input').select(); };
 
-      // Big activate/deactivate button
-      const toggleRow = document.createElement('div');
-      toggleRow.style.cssText = 'margin-top:10px;text-align:center';
+      // Save slug
+      $('btn-slug-save').onclick = async () => {
+        const newSlug = $('survey-slug-input').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+        const r = await api('/api/admin/surveys/' + currentSurvey.id + '/slug', { method: 'PUT', body: JSON.stringify({ slug: newSlug }) });
+        if (r.ok) {
+          $('btn-slug-save').textContent = '✅';
+          setTimeout(() => { $('btn-slug-save').textContent = 'Enregistrer'; }, 1500);
+          await loadSurveys();
+        } else {
+          const err = await r.json().catch(() => ({}));
+          alert(err.error || 'Erreur');
+        }
+      };
+
+      // Action buttons container
+      const actionsRow = urlBox.querySelector('.survey-actions-row');
+
+      // Activate/deactivate button
       if (currentSurvey.active) {
-        toggleRow.innerHTML = '<button class="btn-survey-toggle btn-survey-deactivate">🔴 Désactiver ce sondage</button>';
+        actionsRow.innerHTML = '<button class="btn-survey-toggle btn-survey-deactivate">🔴 Désactiver ce sondage</button>';
       } else {
-        toggleRow.innerHTML = '<button class="btn-survey-toggle btn-survey-activate">🟢 Activer ce sondage</button>';
+        actionsRow.innerHTML = '<button class="btn-survey-toggle btn-survey-activate">🟢 Activer ce sondage</button>';
       }
-      urlBox.appendChild(toggleRow);
-      toggleRow.querySelector('.btn-survey-toggle').onclick = async () => {
+      actionsRow.querySelector('.btn-survey-toggle').onclick = async () => {
         const endpoint = currentSurvey.active
           ? '/api/admin/surveys/' + currentSurvey.id + '/deactivate'
           : '/api/admin/surveys/' + currentSurvey.id + '/activate';
         await api(endpoint, { method: 'POST' });
         await loadSurveys();
       };
+
+      // Reset demographics button
+      const resetDemoBtn = document.createElement('button');
+      resetDemoBtn.textContent = '🔄 Réinitialiser les données démographiques';
+      resetDemoBtn.style.cssText = 'padding:8px 16px;border-radius:8px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:0.85em';
+      resetDemoBtn.onclick = async () => {
+        if (!confirm('Les répondants devront re-saisir leur genre et âge au prochain chargement. Continuer ?')) return;
+        await api('/api/admin/surveys/' + currentSurvey.id + '/reset-demo', { method: 'POST' });
+        resetDemoBtn.textContent = '✅ Réinitialisé !';
+        setTimeout(() => { resetDemoBtn.textContent = '🔄 Réinitialiser les données démographiques'; }, 2000);
+      };
+      actionsRow.appendChild(resetDemoBtn);
     } else {
       urlBox.innerHTML = '';
     }

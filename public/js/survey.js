@@ -5,17 +5,23 @@
   const CLUB_HUES = { 'Le Glouton Club': 30, 'Metronomus': 280, 'Red carpet': 340, 'La situation': 180 };
   const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
 
-  // Survey ID from URL ?s=<id> — each survey has its own localStorage
-  const surveyId = new URLSearchParams(window.location.search).get('s') || '';
-  const storageKey = surveyId ? 'answered_s' + surveyId : 'answered';
-  const apiSuffix = surveyId ? (url => url + (url.includes('?') ? '&' : '?') + 's=' + surveyId) : (url => url);
+  // Survey ID from URL ?s=<id> or from slug (path like /mon-sondage)
+  let surveyId = new URLSearchParams(window.location.search).get('s') || '';
+  const slug = (!surveyId && window.location.pathname !== '/' && !window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/tournage'))
+    ? window.location.pathname.replace(/^\//, '').replace(/\/$/, '') : '';
 
-  const answeredIds = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
+  // Will be set after init resolves slug → id
+  let storageKey, apiSuffix, answeredIds, demoKey, demographics;
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
   let countdownTimer = null, countdownLeft = 15, skipAllowed = true;
-  // Demographics (stored per-survey in localStorage, sent with every answer)
-  const demoKey = surveyId ? 'demo_s' + surveyId : 'demo';
-  let demographics = JSON.parse(localStorage.getItem(demoKey) || 'null'); // { gender, age }
+
+  function initSurveyKeys() {
+    storageKey = surveyId ? 'answered_s' + surveyId : 'answered';
+    apiSuffix = surveyId ? (url => url + (url.includes('?') ? '&' : '?') + 's=' + surveyId) : (url => url);
+    answeredIds = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
+    demoKey = surveyId ? 'demo_s' + surveyId : 'demo';
+    demographics = JSON.parse(localStorage.getItem(demoKey) || 'null');
+  }
 
   const $ = id => document.getElementById(id);
   const screens = ['welcome', 'demographics', 'reminder', 'question', 'registered', 'timeout', 'done'];
@@ -492,11 +498,13 @@
   // ============================================================
   // EVENTS
   // ============================================================
-  // Fetch skip setting
-  fetch(apiSuffix('/api/settings/allow-skip')).then(r => r.json()).then(d => {
-    skipAllowed = d.enabled;
-    $('btn-skip').style.display = skipAllowed ? '' : 'none';
-  }).catch(() => {});
+  // Fetch skip setting — called from boot() after slug resolution
+  function loadSkipSetting() {
+    fetch(apiSuffix('/api/settings/allow-skip')).then(r => r.json()).then(d => {
+      skipAllowed = d.enabled;
+      $('btn-skip').style.display = skipAllowed ? '' : 'none';
+    }).catch(() => {});
+  }
 
   $('btn-start').addEventListener('click', () => {
     if (checks.every(Boolean) && countdownLeft <= 0) {
@@ -597,9 +605,41 @@
   // ============================================================
   // INIT
   // ============================================================
-  initBackground();
-  initLogo();
-  updateAlready();
-  startCountdown();
-  loadParticipantCount();
+  async function boot() {
+    // Resolve slug → survey ID if needed
+    if (slug && !surveyId) {
+      try {
+        const r = await fetch('/api/survey-info?slug=' + encodeURIComponent(slug));
+        const d = await r.json();
+        if (d.id) surveyId = String(d.id);
+      } catch (e) { /* fallback: no survey */ }
+    }
+    initSurveyKeys();
+
+    // Check demo_version — if server bumped it, clear local demographics
+    if (surveyId) {
+      try {
+        const r = await fetch('/api/survey-info?s=' + surveyId);
+        const d = await r.json();
+        if (d.demo_version) {
+          const vKey = 'demo_v_s' + surveyId;
+          const localV = Number(localStorage.getItem(vKey) || '0');
+          if (localV && localV < d.demo_version) {
+            // Server reset demographics — clear local data
+            localStorage.removeItem(demoKey);
+            demographics = null;
+          }
+          localStorage.setItem(vKey, String(d.demo_version));
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    initBackground();
+    initLogo();
+    updateAlready();
+    startCountdown();
+    loadParticipantCount();
+    loadSkipSetting();
+  }
+  boot();
 })();

@@ -88,6 +88,8 @@ async function init() {
     await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS threshold INTEGER DEFAULT 1000").catch(() => {});
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS gender TEXT").catch(() => {});
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS age INTEGER").catch(() => {});
+    await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE").catch(() => {});
+    await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS demo_version INTEGER DEFAULT 1").catch(() => {});
     // Per-survey stats for skip/rejected per question
     await pool.query(`
       CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id));
@@ -121,6 +123,9 @@ async function init() {
     try { sqlite.exec("ALTER TABLE surveys ADD COLUMN threshold INTEGER DEFAULT 1000"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN gender TEXT"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN age INTEGER"); } catch {}
+    try { sqlite.exec("ALTER TABLE surveys ADD COLUMN slug TEXT"); } catch {}
+    try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_surveys_slug ON surveys(slug) WHERE slug IS NOT NULL"); } catch {}
+    try { sqlite.exec("ALTER TABLE surveys ADD COLUMN demo_version INTEGER DEFAULT 1"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
@@ -343,6 +348,18 @@ async function activateSurvey(id) {
 
 async function deactivateSurvey(id) {
   await runNoReturn("UPDATE surveys SET active = 0 WHERE id = $1", [id]);
+}
+
+async function getSurveyBySlug(slug) {
+  return get("SELECT * FROM surveys WHERE slug = $1", [slug]);
+}
+
+async function updateSurveySlug(id, slug) {
+  await runNoReturn("UPDATE surveys SET slug = $1 WHERE id = $2", [slug || null, id]);
+}
+
+async function bumpDemoVersion(id) {
+  await runNoReturn("UPDATE surveys SET demo_version = COALESCE(demo_version, 1) + 1 WHERE id = $1", [id]);
 }
 
 async function deleteSurvey(id) {
@@ -797,7 +814,7 @@ module.exports = {
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
   GENDER_QUOTA,
   // Survey management
-  getAllSurveys, getActiveSurvey, getSurveyById, createSurvey, renameSurvey, activateSurvey, deactivateSurvey, deleteSurvey,
+  getAllSurveys, getActiveSurvey, getSurveyById, getSurveyBySlug, createSurvey, renameSurvey, updateSurveySlug, bumpDemoVersion, activateSurvey, deactivateSurvey, deleteSurvey,
   getSurveyQuestionIds, addQuestionToSurvey, removeQuestionFromSurvey, duplicateQuestionsToSurvey,
   // Tournage
   getTournageQuestions, getTournageQuestion, getTournageAnswers,
