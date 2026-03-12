@@ -223,6 +223,52 @@
     if (s.noDemoCount > 0) {
       $('ds-minors').textContent += '  |  ⚠️ ' + s.noDemoCount + ' réponses sans démographie (anciennes)';
     }
+    // Age distribution
+    renderAgePanel(s);
+  }
+
+  function renderAgePanel(s) {
+    const panel = $('age-panel');
+    const dist = s.ageDistribution || [];
+    if (!dist.length) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+
+    // Average
+    $('age-avg').textContent = 'Moyenne : ' + (s.avgAge || 0).toFixed(1) + ' ans';
+
+    // Group by age brackets
+    const brackets = [
+      { label: '10-14', min: 10, max: 14 },
+      { label: '15-17', min: 15, max: 17 },
+      { label: '18-24', min: 18, max: 24 },
+      { label: '25-34', min: 25, max: 34 },
+      { label: '35-44', min: 35, max: 44 },
+      { label: '45-54', min: 45, max: 54 },
+      { label: '55-64', min: 55, max: 64 },
+      { label: '65+', min: 65, max: 99 },
+    ];
+    const total = dist.reduce((a, r) => a + r.count, 0);
+    const grouped = brackets.map(b => {
+      const count = dist.filter(r => r.age >= b.min && r.age <= b.max).reduce((a, r) => a + r.count, 0);
+      return { ...b, count, pct: total > 0 ? (count / total * 100) : 0 };
+    }).filter(b => b.count > 0 || b.min >= 18); // always show 18+ brackets
+
+    const maxPct = Math.max(...grouped.map(b => b.pct), 1);
+    let html = '';
+    grouped.forEach(b => {
+      const barW = Math.max((b.pct / maxPct) * 100, 1);
+      const isMinor = b.max < 18;
+      html += '<div class="age-bar-row">' +
+        '<span class="age-bar-label">' + b.label + '</span>' +
+        '<div class="age-bar-track"><div class="age-bar-fill' + (isMinor ? ' minor' : '') + '" style="width:' + barW.toFixed(1) + '%"></div></div>' +
+        '<span class="age-bar-val">' + b.count + ' <small>(' + b.pct.toFixed(1) + '%)</small></span>' +
+      '</div>';
+    });
+    $('age-chart').innerHTML = html;
+
+    // Footer: individual ages detail
+    const topAges = dist.sort((a, b) => b.count - a.count).slice(0, 5);
+    $('age-footer').textContent = 'Top âges : ' + topAges.map(r => r.age + ' ans (' + r.count + ')').join(', ');
   }
 
   // Representative mode toggle

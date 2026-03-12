@@ -172,6 +172,21 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 .demo-stats-row{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:12px;justify-content:center}
 .demo-stat{font-size:12px;color:var(--text-gray);background:rgba(255,255,255,.04);padding:4px 10px;border-radius:8px}
+/* Age distribution panel */
+.age-panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+.age-panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.age-panel-title{font-size:14px;font-weight:600;color:var(--text-light)}
+.age-panel-avg{font-size:13px;color:var(--green);font-weight:700;font-family:ui-monospace,monospace}
+.age-chart{display:flex;flex-direction:column;gap:6px}
+.age-bar-row{display:flex;align-items:center;gap:8px}
+.age-bar-label{font-size:11px;color:var(--text-gray);min-width:40px;text-align:right;font-family:ui-monospace,monospace}
+.age-bar-track{flex:1;height:16px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden}
+.age-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#7B68EE,#9B8FFF);transition:width .3s}
+.age-bar-fill.minor{background:linear-gradient(90deg,#F59E0B,#FFDA77)}
+.age-bar-val{font-size:11px;color:var(--text-light);min-width:75px;font-family:ui-monospace,monospace}
+.age-bar-val small{color:var(--text-gray)}
+.age-panel-footer{margin-top:10px;font-size:11px;color:var(--text-gray);text-align:center}
+
 .representative-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
 .q-card-gender-counts{display:flex;gap:8px;font-size:11px;font-weight:600;margin-top:4px;justify-content:flex-end}
 

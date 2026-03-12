@@ -571,7 +571,12 @@ async function getStats(surveyId) {
   const adultMale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'homme' AND age >= 18", [surveyId])).c);
   const adultFemale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'femme' AND age >= 18", [surveyId])).c);
   const noDemoCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND (age IS NULL OR gender IS NULL)", [surveyId])).c);
-  return { totalAnswers, completeQuestions, totalQuestions, genderQuota: GENDER_QUOTA, genderCounts, minorCount, adultCount, adultMale, adultFemale, noDemoCount };
+  // Age distribution
+  const ageRows = await all("SELECT age, COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL GROUP BY age ORDER BY age", [surveyId]);
+  const ageDistribution = ageRows.map(r => ({ age: Number(r.age), count: Number(r.c) }));
+  const totalWithAge = ageDistribution.reduce((s, r) => s + r.count, 0);
+  const avgAge = totalWithAge > 0 ? ageDistribution.reduce((s, r) => s + r.age * r.count, 0) / totalWithAge : 0;
+  return { totalAnswers, completeQuestions, totalQuestions, genderQuota: GENDER_QUOTA, genderCounts, minorCount, adultCount, adultMale, adultFemale, noDemoCount, ageDistribution, avgAge };
 }
 
 async function insertQuestion(catId, text, variantGroup) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Le Sondage</title>
-  <link rel="stylesheet" href="/css/style.css?v=8">
+  <link rel="stylesheet" href="/css/style.css?v=9">
 </head>
 <body>
   <nav class="nav">
@@ -43,6 +43,16 @@
         <span class="demo-stat" id="ds-adults">🔞 0 adultes (18+)</span>
         <span class="demo-stat" id="ds-minors">👶 0 mineurs</span>
       </div>
+      <!-- Age distribution -->
+      <div class="age-panel" id="age-panel" style="display:none">
+        <div class="age-panel-header">
+          <span class="age-panel-title">📊 Répartition par âge</span>
+          <span class="age-panel-avg" id="age-avg"></span>
+        </div>
+        <div class="age-chart" id="age-chart"></div>
+        <div class="age-panel-footer" id="age-footer"></div>
+      </div>
+
       <div class="representative-toggle" id="representative-toggle">
         <label class="toggle-label">Vue échantillon représentatif (50/50 H/F, 18+ only)</label>
         <button class="toggle-btn off" id="btn-representative">OFF</button>
@@ -131,6 +141,6 @@
     </div>
   </div>
 
-  <script src="/js/admin.js?v=16"></script>
+  <script src="/js/admin.js?v=17"></script>
 </body>
 </html>
