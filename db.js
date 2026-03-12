@@ -325,6 +325,10 @@ async function getActiveSurvey() {
   return get("SELECT * FROM surveys WHERE active = 1");
 }
 
+async function getSurveyById(id) {
+  return get("SELECT * FROM surveys WHERE id = $1", [id]);
+}
+
 async function createSurvey(name) {
   return run("INSERT INTO surveys (name, active) VALUES ($1, $2)", [name, 0]);
 }
@@ -783,7 +787,7 @@ module.exports = {
   getTotalParticipantCount, getAnswersWithScores, getQuestionsByCategory,
   GENDER_QUOTA,
   // Survey management
-  getAllSurveys, getActiveSurvey, createSurvey, renameSurvey, activateSurvey, deactivateSurvey, deleteSurvey,
+  getAllSurveys, getActiveSurvey, getSurveyById, createSurvey, renameSurvey, activateSurvey, deactivateSurvey, deleteSurvey,
   getSurveyQuestionIds, addQuestionToSurvey, removeQuestionFromSurvey, duplicateQuestionsToSurvey,
   // Tournage
   getTournageQuestions, getTournageQuestion, getTournageAnswers,

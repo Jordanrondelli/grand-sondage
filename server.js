@@ -193,11 +193,10 @@ async function resolveSurveyId(req) {
   if (explicit) {
     const id = Number(explicit);
     if (isNaN(id)) return null;
-    // Verify the survey exists and is active
-    const surveys = await db.getAllSurveys();
-    const survey = surveys.find(s => s.id === id);
-    // Handle both integer (1) and boolean (true) active values
-    return (survey && (survey.active === 1 || survey.active === true || survey.active === '1')) ? id : null;
+    // Verify the survey exists and is active — use truthy check to handle
+    // all possible DB return types (integer 1, boolean true, string '1', etc.)
+    const survey = await db.getSurveyById(id);
+    return (survey && Number(survey.active)) ? id : null;
   }
   return getActiveSurveyId();
 }
@@ -209,12 +208,18 @@ const LONG_ANSWER_PATTERNS = ['réplique de film'];
 app.get('/api/questions/next', async (req, res) => {
   try {
     const surveyId = await resolveSurveyId(req);
-    if (!surveyId) return res.json({ done: true });
+    if (!surveyId) {
+      console.warn('No active survey found for params:', { s: req.query.s, survey_id: req.body?.survey_id });
+      return res.json({ done: true });
+    }
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
     const gender = req.query.gender || null;
     const age = req.query.age ? Number(req.query.age) : null;
     const q = await db.getAvailableQuestion(surveyId, ex, gender, age);
-    if (!q) return res.json({ done: true });
+    if (!q) {
+      console.warn('No available question for survey', surveyId, { gender, age, excludeCount: ex.length });
+      return res.json({ done: true });
+    }
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
     const cleanText = q.text.replace(/^\[V2\]\s*/, '');
     res.json({ id: q.id, text: cleanText, club: q.club, maxLength: isLong ? 200 : 40 });
