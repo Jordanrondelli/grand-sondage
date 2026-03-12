@@ -229,7 +229,7 @@ async function init() {
 
 // --- Queries ---
 
-const THRESHOLD = 1000;
+const THRESHOLD = parseInt(process.env.SURVEY_THRESHOLD, 10) || 10000;
 
 async function getAvailableQuestion(excludeIds) {
   // Also exclude questions that share a variant_group with any already-answered question

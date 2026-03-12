@@ -9,7 +9,7 @@
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
 
   const $ = id => document.getElementById(id);
-  const screens = ['welcome', 'question', 'registered', 'timeout', 'done'];
+  const screens = ['welcome', 'question', 'registered', 'timeout', 'done', 'error'];
 
   function show(name) {
     screens.forEach(s => $('screen-' + s).classList.remove('active'));
@@ -306,7 +306,12 @@
       show('question');
       input.focus();
       startTimer();
-    } catch { show('done'); setHue(150); }
+    } catch (err) {
+      console.error('loadNext error:', err);
+      $('error-text').textContent = 'Une erreur est survenue. Vérifie ta connexion et réessaie.';
+      show('error');
+      setHue(0);
+    }
   }
 
   // ============================================================
@@ -394,6 +399,7 @@
   $('btn-start').addEventListener('click', () => {
     if (checks.every(Boolean)) { updateAlready(); loadNext(); }
   });
+  $('btn-retry').addEventListener('click', loadNext);
   $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });
   $('btn-confirm-yes').addEventListener('click', confirmSubmit);

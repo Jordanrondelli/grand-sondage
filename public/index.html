@@ -149,9 +149,21 @@
     </div>
   </div>
 
+  <!-- ===== ERROR ===== -->
+  <div id="screen-error" class="screen">
+    <div class="screen-inner" style="max-width:380px">
+      <div class="feedback-emoji anim-popin">😵</div>
+      <p class="feedback-msg anim-slideup" style="animation-delay:0.15s">Oups !</p>
+      <p class="feedback-counter anim-slideup" id="error-text" style="animation-delay:0.25s">Une erreur est survenue. Vérifie ta connexion et réessaie.</p>
+      <div class="anim-slideup" style="animation-delay:0.35s">
+        <button class="btn-primary" id="btn-retry">Réessayer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confetti container -->
   <div id="confetti-container"></div>
 
-  <script src="/js/survey.js?v=8"></script>
+  <script src="/js/survey.js?v=9"></script>
 </body>
 </html>

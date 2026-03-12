@@ -286,6 +286,13 @@ app.get('/api/stats/participants', async (req, res) => {
   catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.get('/api/stats/survey-status', async (req, res) => {
+  try {
+    const stats = await db.getStats();
+    res.json({ ...stats, available: stats.totalQuestions - stats.completeQuestions });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 // --- SSE for shooting mode ---
 const sseClients = new Set();
 function sendSSE(data) {
