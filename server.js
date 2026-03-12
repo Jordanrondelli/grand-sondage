@@ -201,6 +201,33 @@ async function resolveSurveyId(req) {
   return getActiveSurveyId();
 }
 
+// --- Debug endpoint (temporary) ---
+app.get('/api/debug/survey', async (req, res) => {
+  try {
+    const sParam = req.query.s;
+    const allSurveys = await db.getAllSurveys();
+    const result = { sParam, allSurveys: allSurveys.map(s => ({ id: s.id, name: s.name, active: s.active, activeType: typeof s.active })) };
+
+    if (sParam) {
+      const id = Number(sParam);
+      const survey = await db.getSurveyById(id);
+      result.surveyById = survey;
+      result.activeCheck = survey ? { raw: survey.active, type: typeof survey.active, asNumber: Number(survey.active), truthy: !!Number(survey.active) } : null;
+
+      // Check linked questions
+      const questionIds = await db.getSurveyQuestionIds(id);
+      result.linkedQuestionCount = questionIds.length;
+      result.firstQuestionIds = questionIds.slice(0, 5);
+
+      // Try getAvailableQuestion
+      const q = await db.getAvailableQuestion(id, [], 'femme', 15);
+      result.availableQuestion = q;
+    }
+
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message, stack: e.stack }); }
+});
+
 // --- Public API ---
 
 const LONG_ANSWER_PATTERNS = ['réplique de film'];
