@@ -198,10 +198,12 @@ async function resolveSurveyId(req) {
   const explicit = req.query.s || req.body?.survey_id;
   if (explicit) {
     const id = Number(explicit);
+    if (isNaN(id)) return null;
     // Verify the survey exists and is active
     const surveys = await db.getAllSurveys();
     const survey = surveys.find(s => s.id === id);
-    return (survey && Number(survey.active) === 1) ? id : null;
+    // Handle both integer (1) and boolean (true) active values
+    return (survey && (survey.active === 1 || survey.active === true || survey.active === '1')) ? id : null;
   }
   return getActiveSurveyId();
 }
@@ -222,7 +224,7 @@ app.get('/api/questions/next', async (req, res) => {
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
     const cleanText = q.text.replace(/^\[V2\]\s*/, '');
     res.json({ id: q.id, text: cleanText, club: q.club, maxLength: isLong ? 200 : 40 });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  } catch (e) { console.error('GET /api/questions/next error:', e); res.status(500).json({ error: 'Erreur: ' + e.message }); }
 });
 
 app.post('/api/answers', rateLimit, async (req, res) => {
@@ -298,7 +300,7 @@ app.get('/api/stats/participants', async (req, res) => {
   try {
     const surveyId = await resolveSurveyId(req);
     res.json({ count: surveyId ? await db.getTotalParticipantCount(surveyId) : 0 });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  } catch (e) { console.error('GET /api/stats/participants error:', e); res.status(500).json({ error: 'Erreur: ' + e.message }); }
 });
 
 // --- SSE for shooting mode ---

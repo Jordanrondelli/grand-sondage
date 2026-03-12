@@ -379,6 +379,8 @@ async function duplicateQuestionsToSurvey(fromSurveyId, toSurveyId) {
 // Minors can always answer (their answers don't count toward quota)
 async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
   const isAdult = age && age >= 18;
+  // Ensure excludeIds is a valid non-empty array for PostgreSQL ANY()
+  const safeExclude = excludeIds && excludeIds.length > 0 ? excludeIds.map(Number).filter(n => !isNaN(n)) : [0];
 
   // For adults: only show questions where their gender quota isn't full
   // For minors: show questions where at least one gender quota isn't full (question not fully complete)
@@ -386,12 +388,12 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
     let genderFilter;
     if (isAdult && gender) {
       // Adult: check only their gender's quota
-      genderFilter = `AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = $4 AND a.age >= 18) < $5`;
+      genderFilter = `AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = $2 AND a.age >= 18) < $3`;
     } else {
       // Minor or unknown: show if question not fully complete for both genders
       genderFilter = `AND (
-        (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'homme' AND a.age >= 18) < $5
-        OR (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'femme' AND a.age >= 18) < $5
+        (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'homme' AND a.age >= 18) < $3
+        OR (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'femme' AND a.age >= 18) < $3
       )`;
     }
     return all(
@@ -400,12 +402,12 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
        JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = $1
        WHERE q.active = 1
          ${genderFilter}
-         AND NOT (q.id = ANY($3::int[]))
+         AND NOT (q.id = ANY($4::int[]))
          AND (q.variant_group IS NULL OR q.variant_group NOT IN (
-           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($3::int[])
+           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($4::int[])
          ))
        ORDER BY RANDOM() LIMIT 1`,
-      [surveyId, null/*unused*/, excludeIds, gender || '', GENDER_QUOTA]
+      [surveyId, gender || '', GENDER_QUOTA, safeExclude]
     ).then(rows => rows[0] || null);
   } else {
     if (isAdult && gender) {
