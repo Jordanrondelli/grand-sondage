@@ -244,7 +244,7 @@
   function renderStats(s) {
     if (s) lastStats = s; else s = lastStats;
     if (!s) return;
-    $('s-total').textContent = vCount(s.totalAnswers);
+    $('s-total').textContent = vCount(representativeMode ? (s.adultMale || 0) + (s.adultFemale || 0) : s.totalAnswers);
     $('s-complete').textContent = s.completeQuestions + '/' + s.totalQuestions;
     const pct = s.totalQuestions > 0 ? Math.round((s.completeQuestions / s.totalQuestions) * 100) : 0;
     $('s-pct').textContent = pct + '%';
@@ -311,7 +311,8 @@
     representativeMode = !representativeMode;
     $('btn-representative').textContent = representativeMode ? 'ON' : 'OFF';
     $('btn-representative').className = 'toggle-btn ' + (representativeMode ? 'on' : 'off');
-    if (expandedId) loadDetail(expandedId);
+    renderStats();
+    renderCards();
   };
 
   // Filters
@@ -353,7 +354,8 @@
       const maleOk = q.male_adult_count >= GENDER_QUOTA;
       const femaleOk = q.female_adult_count >= GENDER_QUOTA;
       const isComplete = maleOk && femaleOk;
-      const displayCount = vCount(q.answer_count);
+      const rawCount = representativeMode ? (q.male_adult_count + q.female_adult_count) : q.answer_count;
+      const displayCount = vCount(rawCount);
       const displayMax = videoMode ? 100 : 1000;
       const countColor = isComplete ? '#22C55E' : (maleOk || femaleOk) ? '#F59E0B' : '#888';
       const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
@@ -516,7 +518,7 @@
     // Per-question CSV export
     $('export-q-' + id).onclick = (e) => {
       e.stopPropagation();
-      window.location.href = '/api/admin/questions/' + id + '/export?survey_id=' + currentSurveyId;
+      window.location.href = '/api/admin/questions/' + id + '/export?survey_id=' + currentSurveyId + (representativeMode ? '&filter=representative' : '');
     };
 
     // Answer editing
@@ -723,7 +725,7 @@
   $('correction-right').addEventListener('keydown', e => { if (e.key === 'Enter') addCorrection(); });
 
   // Export
-  $('btn-export').onclick = () => { window.location.href = '/api/admin/export?survey_id=' + currentSurveyId; };
+  $('btn-export').onclick = () => { window.location.href = '/api/admin/export?survey_id=' + currentSurveyId + (representativeMode ? '&filter=representative' : ''); };
   // Tournage
   $('btn-tournage').onclick = () => { window.open('/tournage', '_blank'); };
 

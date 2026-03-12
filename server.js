@@ -687,7 +687,10 @@ app.get('/api/admin/export', requireAdmin, async (req, res) => {
   try {
     const surveyId = req.query.survey_id;
     if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
-    const rows = await db.getAllAnswersForExport(Number(surveyId));
+    const filter = req.query.filter;
+    const rows = filter === 'representative'
+      ? await db.getAllAnswersForExportRepresentative(Number(surveyId))
+      : await db.getAllAnswersForExport(Number(surveyId));
     const byQuestion = {};
     rows.forEach(r => {
       if (!byQuestion[r.question_id]) {
@@ -724,7 +727,10 @@ app.get('/api/admin/questions/:id/export', requireAdmin, async (req, res) => {
     if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
+    const filter = req.query.filter;
+    const rawAnswers = filter === 'representative'
+      ? await db.getAnswersGroupedRepresentative(Number(surveyId), req.params.id, db.GENDER_QUOTA)
+      : await db.getAnswersGrouped(Number(surveyId), req.params.id);
 
     const clustered = [];
     for (const item of rawAnswers) {
