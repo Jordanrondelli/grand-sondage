@@ -25,17 +25,11 @@ async function refreshCache() {
 function invalidateCache() { cacheTime = 0; }
 
 function normalizeAnswer(text) {
+  // Raw answer — only trim whitespace and remove emojis
   let s = text
-    .toLowerCase()
     .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\ufe0f]/gu, '')
-    .replace(/[^a-zà-ÿ0-9\s''\-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  // Strip leading articles only (keep possessifs: mon, ta, son, etc.)
-  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une |c'est |je dirais |je dis |j'aime |j'adore )/i, '').trim();
-  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une )/i, '').trim();
-  // Strip trailing filler
-  s = s.replace(/\s+(lol|mdr|haha|xd|ptdr|bien sur|evidemment|je pense|je crois|perso|personnellement|quoi|en vrai|genre)$/i, '').trim();
   return s;
 }
 
@@ -266,13 +260,7 @@ app.post('/api/answers', rateLimit, async (req, res) => {
         return res.status(410).json({ error: 'Complet' });
     }
 
-    // Fuzzy match against existing answers (if enabled)
-    if (autoMergeEnabled) {
-      const existing = await db.getExistingAnswers(surveyId, question_id);
-      const match = findMatchingAnswer(normalized, existing);
-      if (match) normalized = match;
-    }
-
+    // Auto-merge disabled — store raw answer as-is
     await db.insertAnswer(surveyId, question_id, normalized, rt, validGender, validAge);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
