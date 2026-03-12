@@ -384,35 +384,71 @@ async function duplicateQuestionsToSurvey(fromSurveyId, toSurveyId) {
 
 // --- Question queries (survey-scoped) ---
 
-async function getAvailableQuestion(surveyId, excludeIds) {
+// Gender quota per question: threshold/2 adult men + threshold/2 adult women = complete
+// Minors can always answer (their answers don't count toward quota)
+async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
   const threshold = await getSurveyThreshold(surveyId);
+  const genderQuota = Math.floor(threshold / 2);
+  const isAdult = age && age >= 18;
+
+  // For adults: only show questions where their gender quota isn't full
+  // For minors: show questions where at least one gender quota isn't full (question not fully complete)
   if (isPostgres) {
+    let genderFilter;
+    if (isAdult && gender) {
+      // Adult: check only their gender's quota
+      genderFilter = `AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = $4 AND a.age >= 18) < $5`;
+    } else {
+      // Minor or unknown: show if question not fully complete for both genders
+      genderFilter = `AND (
+        (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'homme' AND a.age >= 18) < $5
+        OR (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'femme' AND a.age >= 18) < $5
+      )`;
+    }
     return all(
       `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
        JOIN categories c ON c.id = q.category_id
        JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = $1
        WHERE q.active = 1
-         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1) < $2
+         ${genderFilter}
          AND NOT (q.id = ANY($3::int[]))
          AND (q.variant_group IS NULL OR q.variant_group NOT IN (
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($3::int[])
          ))
        ORDER BY RANDOM() LIMIT 1`,
-      [surveyId, threshold, excludeIds]
+      [surveyId, null/*unused*/, excludeIds, gender || '', genderQuota]
     ).then(rows => rows[0] || null);
   } else {
-    return Promise.resolve(sqlite.prepare(
-      `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
-       JOIN categories c ON c.id = q.category_id
-       JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = ?
-       WHERE q.active = 1
-         AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ?) < ?
-         AND q.id NOT IN (SELECT value FROM json_each(?))
-         AND (q.variant_group IS NULL OR q.variant_group NOT IN (
-           SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
-         ))
-       ORDER BY RANDOM() LIMIT 1`
-    ).get(surveyId, surveyId, threshold, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
+    if (isAdult && gender) {
+      return Promise.resolve(sqlite.prepare(
+        `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
+         JOIN categories c ON c.id = q.category_id
+         JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = ?
+         WHERE q.active = 1
+           AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ? AND a.gender = ? AND a.age >= 18) < ?
+           AND q.id NOT IN (SELECT value FROM json_each(?))
+           AND (q.variant_group IS NULL OR q.variant_group NOT IN (
+             SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
+           ))
+         ORDER BY RANDOM() LIMIT 1`
+      ).get(surveyId, surveyId, gender, genderQuota, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
+    } else {
+      return Promise.resolve(sqlite.prepare(
+        `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
+         JOIN categories c ON c.id = q.category_id
+         JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = ?
+         WHERE q.active = 1
+           AND (
+             (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ? AND a.gender = 'homme' AND a.age >= 18) < ?
+             OR (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ? AND a.gender = 'femme' AND a.age >= 18) < ?
+           )
+           AND q.id NOT IN (SELECT value FROM json_each(?))
+           AND (q.variant_group IS NULL OR q.variant_group NOT IN (
+             SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
+           ))
+         ORDER BY RANDOM() LIMIT 1`
+      ).get(surveyId, surveyId, genderQuota, surveyId, genderQuota, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null);
+    }
   }
 }
 
@@ -451,6 +487,10 @@ async function getAnswerCount(surveyId, qid) {
   return Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2", [qid, surveyId])).c);
 }
 
+async function getGenderAdultCount(surveyId, qid, gender) {
+  return Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2 AND gender = $3 AND age >= 18", [qid, surveyId, gender])).c);
+}
+
 async function getAllCategories() {
   return all("SELECT * FROM categories ORDER BY name");
 }
@@ -459,6 +499,8 @@ async function getQuestionsWithCounts(surveyId) {
   const rows = await all(
     `SELECT q.id, q.text, q.active, q.category_id, q.variant_group, c.name as category_name,
       (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1) as answer_count,
+      (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'homme' AND a.age >= 18) as male_adult_count,
+      (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'femme' AND a.age >= 18) as female_adult_count,
       (SELECT ROUND(AVG(a.response_time)) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.response_time IS NOT NULL) as avg_time,
       COALESCE((SELECT sqs.skip_count FROM survey_question_stats sqs WHERE sqs.survey_id = $1 AND sqs.question_id = q.id), 0) as skip_count,
       COALESCE((SELECT sqs.rejected_count FROM survey_question_stats sqs WHERE sqs.survey_id = $1 AND sqs.question_id = q.id), 0) as rejected_count
@@ -468,7 +510,7 @@ async function getQuestionsWithCounts(surveyId) {
     ORDER BY c.name, q.id`,
     [surveyId]
   );
-  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), skip_count: Number(r.skip_count || 0), rejected_count: Number(r.rejected_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null, variant_group: r.variant_group || null }));
+  return rows.map(r => ({ ...r, answer_count: Number(r.answer_count), male_adult_count: Number(r.male_adult_count || 0), female_adult_count: Number(r.female_adult_count || 0), skip_count: Number(r.skip_count || 0), rejected_count: Number(r.rejected_count || 0), avg_time: r.avg_time ? Number(r.avg_time) : null, variant_group: r.variant_group || null }));
 }
 
 async function getQuestionById(id) {
@@ -521,12 +563,14 @@ async function getAnswersGroupedRepresentative(surveyId, qid, maxPerGender) {
 
 async function getStats(surveyId) {
   const threshold = await getSurveyThreshold(surveyId);
+  const genderQuota = Math.floor(threshold / 2);
   const totalAnswers = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1", [surveyId])).c);
   const sqIds = await getSurveyQuestionIds(surveyId);
   let completeQuestions = 0;
   for (const qid of sqIds) {
-    const cnt = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2", [qid, surveyId])).c);
-    if (cnt >= threshold) completeQuestions++;
+    const maleAdult = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2 AND gender = 'homme' AND age >= 18", [qid, surveyId])).c);
+    const femaleAdult = Number((await get("SELECT COUNT(*) as c FROM answers WHERE question_id = $1 AND survey_id = $2 AND gender = 'femme' AND age >= 18", [qid, surveyId])).c);
+    if (maleAdult >= genderQuota && femaleAdult >= genderQuota) completeQuestions++;
   }
   const totalQuestions = sqIds.length;
   // Demographics breakdown
@@ -535,7 +579,9 @@ async function getStats(surveyId) {
   genderRows.forEach(r => { genderCounts[r.gender] = Number(r.c); });
   const minorCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age < 18", [surveyId])).c);
   const adultCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age >= 18", [surveyId])).c);
-  return { totalAnswers, completeQuestions, totalQuestions, threshold, genderCounts, minorCount, adultCount };
+  const adultMale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'homme' AND age >= 18", [surveyId])).c);
+  const adultFemale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'femme' AND age >= 18", [surveyId])).c);
+  return { totalAnswers, completeQuestions, totalQuestions, threshold, genderQuota, genderCounts, minorCount, adultCount, adultMale, adultFemale };
 }
 
 async function insertQuestion(catId, text, variantGroup) {
@@ -731,7 +777,7 @@ async function reorderTournageQuestions(orderedIds) {
 }
 
 module.exports = {
-  init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount,
+  init, getAvailableQuestion, insertAnswer, incrementSkip, incrementRejected, getAnswerCount, getGenderAdultCount,
   getAllCategories, getQuestionsWithCounts, getQuestionById,
   getAnswersGrouped, getAnswersGroupedRepresentative, getStats, insertQuestion, updateQuestion,
   deleteQuestion, mergeAnswers, getAllAnswersForExport,

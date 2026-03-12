@@ -201,10 +201,11 @@
     $('s-threshold').textContent = videoMode ? Math.round(currentThreshold / 10) : currentThreshold;
     // Demographics
     const gc = s.genderCounts || {};
-    $('ds-hommes').textContent = '👨 ' + (gc.homme || 0) + ' hommes';
-    $('ds-femmes').textContent = '👩 ' + (gc.femme || 0) + ' femmes';
-    $('ds-adults').textContent = '🔞 ' + (s.adultCount || 0) + ' adultes (18+)';
-    $('ds-minors').textContent = '👶 ' + (s.minorCount || 0) + ' mineurs';
+    const gq = s.genderQuota || Math.floor(currentThreshold / 2);
+    $('ds-hommes').textContent = '👨 ' + (gc.homme || 0) + ' hommes (' + (s.adultMale || 0) + ' adultes)';
+    $('ds-femmes').textContent = '👩 ' + (gc.femme || 0) + ' femmes (' + (s.adultFemale || 0) + ' adultes)';
+    $('ds-adults').textContent = '🎯 Quota: ' + gq + 'H / ' + gq + 'F adultes';
+    $('ds-minors').textContent = '👶 ' + (s.minorCount || 0) + ' mineurs (non comptés)';
   }
 
   // Threshold editor
@@ -262,15 +263,20 @@
       const club = CLUBS[q.category_name] || { emoji: '', color: '#888' };
       const card = document.createElement('div');
       card.className = 'q-card' + (expandedId === q.id ? ' open' : '');
+      const genderQuota = Math.floor(currentThreshold / 2);
+      const maleOk = q.male_adult_count >= genderQuota;
+      const femaleOk = q.female_adult_count >= genderQuota;
+      const isComplete = maleOk && femaleOk;
       const displayCount = vCount(q.answer_count);
       const displayMax = videoMode ? Math.round(currentThreshold / 10) : currentThreshold;
-      const thresholdFull = displayMax;
-      const thresholdMid = Math.round(displayMax / 2);
-      const countColor = displayCount >= thresholdFull ? '#22C55E' : displayCount > thresholdMid ? '#F59E0B' : '#888';
+      const countColor = isComplete ? '#22C55E' : (maleOk || femaleOk) ? '#F59E0B' : '#888';
       const avgLabel = q.avg_time ? q.avg_time + 's' : '—';
       const skipLabel = q.skip_count > 0 ? q.skip_count : '0';
       const rejLabel = q.rejected_count > 0 ? ' · 🚫 ' + q.rejected_count + ' rejetée' + (q.rejected_count > 1 ? 's' : '') : '';
       const variantLabel = q.variant_group ? ' · 🔗 variante ' + q.variant_group : '';
+      const maleColor = maleOk ? '#22C55E' : '#888';
+      const femaleColor = femaleOk ? '#22C55E' : '#888';
+      const dq = videoMode ? Math.round(genderQuota / 10) : genderQuota;
       const qNum = idx + 1;
       card.innerHTML =
         '<div class="q-card-header" data-qid="' + q.id + '">' +
@@ -285,6 +291,10 @@
               '<button class="q-action-btn q-del-btn" title="Supprimer la question">🗑️</button>' +
             '</div>' +
             '<div class="q-card-count" style="color:' + countColor + '">' + displayCount + '<span style="color:#555;font-size:13px">/' + displayMax + '</span></div>' +
+            '<div class="q-card-gender-counts">' +
+              '<span style="color:' + maleColor + '">👨 ' + (videoMode ? Math.round(q.male_adult_count/10) : q.male_adult_count) + '/' + dq + '</span>' +
+              '<span style="color:' + femaleColor + '">👩 ' + (videoMode ? Math.round(q.female_adult_count/10) : q.female_adult_count) + '/' + dq + '</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="q-card-detail" id="detail-' + q.id + '"></div>';

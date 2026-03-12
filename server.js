@@ -215,7 +215,9 @@ app.get('/api/questions/next', async (req, res) => {
     const surveyId = await resolveSurveyId(req);
     if (!surveyId) return res.json({ done: true });
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
-    const q = await db.getAvailableQuestion(surveyId, ex);
+    const gender = req.query.gender || null;
+    const age = req.query.age ? Number(req.query.age) : null;
+    const q = await db.getAvailableQuestion(surveyId, ex, gender, age);
     if (!q) return res.json({ done: true });
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
     const cleanText = q.text.replace(/^\[V2\]\s*/, '');
@@ -251,10 +253,18 @@ app.post('/api/answers', rateLimit, async (req, res) => {
 
     // No auto-corrections — keep raw normalized answer
 
-    const threshold = await db.getSurveyThreshold(surveyId);
-    const count = await db.getAnswerCount(surveyId, question_id);
-    if (count >= threshold)
-      return res.status(410).json({ error: 'Complet' });
+    // Validate and pass demographics
+    const validGender = (gender === 'homme' || gender === 'femme') ? gender : null;
+    const validAge = (typeof age === 'number' && age >= 10 && age <= 77) ? age : null;
+
+    // Check gender quota for adults (minors always pass)
+    if (validGender && validAge && validAge >= 18) {
+      const threshold = await db.getSurveyThreshold(surveyId);
+      const genderQuota = Math.floor(threshold / 2);
+      const genderCount = await db.getGenderAdultCount(surveyId, question_id, validGender);
+      if (genderCount >= genderQuota)
+        return res.status(410).json({ error: 'Complet' });
+    }
 
     // Fuzzy match against existing answers (if enabled)
     if (autoMergeEnabled) {
@@ -262,10 +272,6 @@ app.post('/api/answers', rateLimit, async (req, res) => {
       const match = findMatchingAnswer(normalized, existing);
       if (match) normalized = match;
     }
-
-    // Validate and pass demographics
-    const validGender = (gender === 'homme' || gender === 'femme') ? gender : null;
-    const validAge = (typeof age === 'number' && age >= 10 && age <= 77) ? age : null;
 
     await db.insertAnswer(surveyId, question_id, normalized, rt, validGender, validAge);
     res.json({ ok: true });

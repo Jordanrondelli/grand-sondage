@@ -18,7 +18,7 @@
   let demographics = JSON.parse(localStorage.getItem(demoKey) || 'null'); // { gender, age }
 
   const $ = id => document.getElementById(id);
-  const screens = ['welcome', 'demographics', 'question', 'registered', 'timeout', 'done'];
+  const screens = ['welcome', 'demographics', 'reminder', 'question', 'registered', 'timeout', 'done'];
 
   function show(name) {
     screens.forEach(s => $('screen-' + s).classList.remove('active'));
@@ -371,7 +371,9 @@
     stopTimer();
     setPulse(0);
     try {
-      const res = await fetch(apiSuffix('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds]))));
+      let nextUrl = '/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds]));
+      if (demographics) nextUrl += '&gender=' + demographics.gender + '&age=' + demographics.age;
+      const res = await fetch(apiSuffix(nextUrl));
       const data = await res.json();
       if (data.done) {
         $('done-text').textContent = answeredIds.size > 0
@@ -499,7 +501,7 @@
   $('btn-start').addEventListener('click', () => {
     if (checks.every(Boolean) && countdownLeft <= 0) {
       updateAlready();
-      if (demographics) { loadNext(); } else { show('demographics'); }
+      if (demographics) { show('reminder'); } else { show('demographics'); }
     }
   });
 
@@ -536,9 +538,13 @@
       if (!selectedGender || !ageSelect.value) return;
       demographics = { gender: selectedGender, age: Number(ageSelect.value) };
       localStorage.setItem(demoKey, JSON.stringify(demographics));
-      loadNext();
+      show('reminder');
     });
   })();
+
+  $('btn-reminder-go').addEventListener('click', () => {
+    loadNext();
+  });
 
   $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });

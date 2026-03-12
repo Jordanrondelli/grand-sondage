@@ -191,6 +191,12 @@ body{
 .demo-age-select:focus{border-color:#9B8FFF;outline:none}
 .demo-age-select option{background:#1a1a2e;color:#fff}
 
+/* ===== REMINDER ===== */
+.reminder-emoji{font-size:56px;margin-bottom:16px;text-align:center}
+.reminder-box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:20px 24px;margin-bottom:24px}
+.reminder-text{font-size:15px;line-height:1.7;color:rgba(255,255,255,0.8);text-align:center}
+.reminder-text strong{color:#fff}
+
 /* ===== RESPONSIVE ===== */
 @media(max-width:480px){
   .welcome-title{font-size:30px}
