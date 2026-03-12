@@ -90,6 +90,8 @@ async function init() {
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS age INTEGER").catch(() => {});
     await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE").catch(() => {});
     await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS demo_version INTEGER DEFAULT 1").catch(() => {});
+    await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS respondent_id TEXT").catch(() => {});
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_answers_respondent ON answers(respondent_id)").catch(() => {});
     // Per-survey stats for skip/rejected per question
     await pool.query(`
       CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id));
@@ -126,6 +128,8 @@ async function init() {
     try { sqlite.exec("ALTER TABLE surveys ADD COLUMN slug TEXT"); } catch {}
     try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_surveys_slug ON surveys(slug) WHERE slug IS NOT NULL"); } catch {}
     try { sqlite.exec("ALTER TABLE surveys ADD COLUMN demo_version INTEGER DEFAULT 1"); } catch {}
+    try { sqlite.exec("ALTER TABLE answers ADD COLUMN respondent_id TEXT"); } catch {}
+    try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_answers_respondent ON answers(respondent_id)"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
@@ -474,8 +478,8 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
   }
 }
 
-async function insertAnswer(surveyId, qid, text, responseTime, gender, age) {
-  await runNoReturn("INSERT INTO answers (survey_id, question_id, text, response_time, gender, age) VALUES ($1, $2, $3, $4, $5, $6)", [surveyId, qid, text, responseTime || null, gender || null, age || null]);
+async function insertAnswer(surveyId, qid, text, responseTime, gender, age, respondentId) {
+  await runNoReturn("INSERT INTO answers (survey_id, question_id, text, response_time, gender, age, respondent_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", [surveyId, qid, text, responseTime || null, gender || null, age || null, respondentId || null]);
 }
 
 async function incrementSkip(surveyId, qid) {
@@ -593,17 +597,22 @@ async function getStats(surveyId) {
     if (maleAdult >= GENDER_QUOTA && femaleAdult >= GENDER_QUOTA) completeQuestions++;
   }
   const totalQuestions = sqIds.length;
-  // Demographics breakdown
-  const genderRows = await all("SELECT gender, COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender IS NOT NULL GROUP BY gender", [surveyId]);
+  // Demographics breakdown — count unique respondents (not answer rows)
+  // Use respondent_id when available, fall back to counting answer rows for legacy data
+  const hasRespondentIds = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND respondent_id IS NOT NULL", [surveyId])).c) > 0;
+  const distinctCol = hasRespondentIds ? 'DISTINCT respondent_id' : '*';
+  const genderRows = await all("SELECT gender, COUNT(" + distinctCol + ") as c FROM answers WHERE survey_id = $1 AND gender IS NOT NULL GROUP BY gender", [surveyId]);
   const genderCounts = {};
   genderRows.forEach(r => { genderCounts[r.gender] = Number(r.c); });
-  const minorCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age < 18", [surveyId])).c);
-  const adultCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age >= 18", [surveyId])).c);
-  const adultMale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'homme' AND age >= 18", [surveyId])).c);
-  const adultFemale = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND gender = 'femme' AND age >= 18", [surveyId])).c);
-  const noDemoCount = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND (age IS NULL OR gender IS NULL)", [surveyId])).c);
-  // Age distribution
-  const ageRows = await all("SELECT age, COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL GROUP BY age ORDER BY age", [surveyId]);
+  const minorCount = Number((await get("SELECT COUNT(" + distinctCol + ") as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age < 18", [surveyId])).c);
+  const adultCount = Number((await get("SELECT COUNT(" + distinctCol + ") as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL AND age >= 18", [surveyId])).c);
+  const adultMale = Number((await get("SELECT COUNT(" + distinctCol + ") as c FROM answers WHERE survey_id = $1 AND gender = 'homme' AND age >= 18", [surveyId])).c);
+  const adultFemale = Number((await get("SELECT COUNT(" + distinctCol + ") as c FROM answers WHERE survey_id = $1 AND gender = 'femme' AND age >= 18", [surveyId])).c);
+  const noDemoCount = Number((await get("SELECT COUNT(" + distinctCol + ") as c FROM answers WHERE survey_id = $1 AND (age IS NULL OR gender IS NULL)", [surveyId])).c);
+  // Age distribution — unique respondents
+  const ageRows = hasRespondentIds
+    ? await all("SELECT age, COUNT(DISTINCT respondent_id) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL GROUP BY age ORDER BY age", [surveyId])
+    : await all("SELECT age, COUNT(*) as c FROM answers WHERE survey_id = $1 AND age IS NOT NULL GROUP BY age ORDER BY age", [surveyId]);
   const ageDistribution = ageRows.map(r => ({ age: Number(r.age), count: Number(r.c) }));
   const totalWithAge = ageDistribution.reduce((s, r) => s + r.count, 0);
   const avgAge = totalWithAge > 0 ? ageDistribution.reduce((s, r) => s + r.age * r.count, 0) / totalWithAge : 0;
@@ -711,7 +720,12 @@ async function deleteCorrection(id) {
 }
 
 async function getTotalParticipantCount(surveyId) {
-  const row = await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1", [surveyId]);
+  // Count unique respondents if respondent_id exists, otherwise count answer rows
+  const hasRid = Number((await get("SELECT COUNT(*) as c FROM answers WHERE survey_id = $1 AND respondent_id IS NOT NULL", [surveyId])).c) > 0;
+  const sql = hasRid
+    ? "SELECT COUNT(DISTINCT respondent_id) as c FROM answers WHERE survey_id = $1"
+    : "SELECT COUNT(*) as c FROM answers WHERE survey_id = $1";
+  const row = await get(sql, [surveyId]);
   return Number(row.c);
 }
 

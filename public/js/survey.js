@@ -11,9 +11,13 @@
     ? window.location.pathname.replace(/^\//, '').replace(/\/$/, '') : '';
 
   // Will be set after init resolves slug → id
-  let storageKey, apiSuffix, answeredIds, demoKey, demographics;
+  let storageKey, apiSuffix, answeredIds, demoKey, demographics, respondentId;
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
   let countdownTimer = null, countdownLeft = 15, skipAllowed = true;
+
+  function generateId() {
+    return 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16)) + '-' + Date.now().toString(36);
+  }
 
   function initSurveyKeys() {
     storageKey = surveyId ? 'answered_s' + surveyId : 'answered';
@@ -21,6 +25,13 @@
     answeredIds = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
     demoKey = surveyId ? 'demo_s' + surveyId : 'demo';
     demographics = JSON.parse(localStorage.getItem(demoKey) || 'null');
+    // Unique respondent ID per survey — persists in localStorage
+    const ridKey = surveyId ? 'rid_s' + surveyId : 'rid';
+    respondentId = localStorage.getItem(ridKey);
+    if (!respondentId) {
+      respondentId = generateId();
+      localStorage.setItem(ridKey, respondentId);
+    }
   }
 
   const $ = id => document.getElementById(id);
@@ -439,7 +450,7 @@
     if (!pendingAnswer || !currentQ) return;
     const rt = getResponseTime();
     try {
-      const resp = await fetch(apiSuffix('/api/answers'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt, survey_id: surveyId ? Number(surveyId) : undefined, gender: demographics?.gender, age: demographics?.age }) });
+      const resp = await fetch(apiSuffix('/api/answers'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt, survey_id: surveyId ? Number(surveyId) : undefined, gender: demographics?.gender, age: demographics?.age, respondent_id: respondentId }) });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         if (err.troll) {
@@ -625,9 +636,12 @@
           const vKey = 'demo_v_s' + surveyId;
           const localV = Number(localStorage.getItem(vKey) || '0');
           if (localV && localV < d.demo_version) {
-            // Server reset demographics — clear local data
+            // Server reset demographics — clear local data + generate new respondent ID
             localStorage.removeItem(demoKey);
             demographics = null;
+            const ridKey = surveyId ? 'rid_s' + surveyId : 'rid';
+            respondentId = generateId();
+            localStorage.setItem(ridKey, respondentId);
           }
           localStorage.setItem(vKey, String(d.demo_version));
         }
