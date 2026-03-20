@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/survey.css?v=3">
+  <link rel="stylesheet" href="/css/survey.css?v=4">
 </head>
 <body>
   <!-- Animated background (managed by JS) -->
@@ -57,7 +57,27 @@
         </div>
       </div>
 
-      <div class="anim-slideup" style="animation-delay:0.4s">
+      <div class="demo-wrap anim-slideup" style="animation-delay:0.35s">
+        <div class="demo-row">
+          <div class="demo-field">
+            <label class="demo-label" for="age-input">Ton âge</label>
+            <div class="age-input-group">
+              <input type="number" id="age-input" min="1" max="120" placeholder="..." class="age-field" inputmode="numeric">
+              <span class="age-suffix">ans</span>
+            </div>
+          </div>
+          <div class="demo-field">
+            <label class="demo-label">Ton genre</label>
+            <div class="gender-buttons" id="gender-buttons">
+              <button type="button" class="gender-btn" data-gender="homme">Homme</button>
+              <button type="button" class="gender-btn" data-gender="femme">Femme</button>
+              <button type="button" class="gender-btn" data-gender="autre">Autre</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="anim-slideup" style="animation-delay:0.45s">
         <div class="live-counter" id="live-counter" style="display:none">
           <span class="live-dot"></span>
           <span id="participant-text"></span>
@@ -164,6 +184,6 @@
   <!-- Confetti container -->
   <div id="confetti-container"></div>
 
-  <script src="/js/survey.js?v=9"></script>
+  <script src="/js/survey.js?v=10"></script>
 </body>
 </html>

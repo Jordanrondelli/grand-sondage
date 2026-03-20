@@ -90,12 +90,21 @@ async function init() {
     try { sqlite.exec("ALTER TABLE questions ADD COLUMN variant_group INTEGER DEFAULT NULL"); } catch {}
   }
 
-  // One-time migration: replace old clubs with new ones
-  const oldCat = await get("SELECT id FROM categories WHERE name = $1", ['vacances']);
-  if (oldCat) {
+  // Add min_age column for age-gated questions
+  if (isPostgres) {
+    await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS min_age INTEGER DEFAULT 0").catch(() => {});
+  } else {
+    try { sqlite.exec("ALTER TABLE questions ADD COLUMN min_age INTEGER DEFAULT 0"); } catch {}
+  }
+
+  // Survey version migration — wipe and re-seed when version changes
+  const SURVEY_VERSION = '2';
+  const currentVersion = await getSetting('survey_version');
+  if (currentVersion !== SURVEY_VERSION) {
     await runNoReturn("DELETE FROM answers");
     await runNoReturn("DELETE FROM questions");
     await runNoReturn("DELETE FROM categories");
+    await setSetting('survey_version', SURVEY_VERSION);
   }
 
   const row = await get('SELECT COUNT(*) as c FROM categories');
@@ -107,98 +116,66 @@ async function init() {
   }
 
   // Seed questions (idempotent — skips duplicates)
-  // Format: [categoryName, variantGroup (null if no variants), text]
+  // Format: [categoryName, variantGroup, text, minAge]
   const cats = await all("SELECT * FROM categories");
   const catMap = {};
   cats.forEach(c => { catMap[c.name] = c.id; });
 
   const seedQuestions = [
     // --- Le Glouton Club ---
-    [catMap['Le Glouton Club'], 1, "Une variété de pâtes ?"],
-    [catMap['Le Glouton Club'], 1, "Un plat de pâtes ?"],
-    [catMap['Le Glouton Club'], 2, "Cite un fruit de mer"],
-    [catMap['Le Glouton Club'], 2, "Qu'est ce qu'on mange et qui vient de la mer ?"],
-    [catMap['Le Glouton Club'], 3, "Qu'est ce qui t'énerve le plus au restaurant ?"],
-    [catMap['Le Glouton Club'], 3, "Qu'est ce qui peut te décevoir au restaurant ?"],
-    [catMap['Le Glouton Club'], 3, "Quelle situation peut te faire quitter un restaurant ?"],
-    [catMap['Le Glouton Club'], 3, "Qu'est ce qui peut te faire mettre 1 étoile à un restaurant ?"],
-    [catMap['Le Glouton Club'], null, "Avec qui préfères-tu aller au restaurant ?"],
-    [catMap['Le Glouton Club'], null, "Un ustensile de cuisine ?"],
-    [catMap['Le Glouton Club'], null, "Quelle est ta cuisine du monde préférée ? (pays d'origine)"],
-    [catMap['Le Glouton Club'], null, "Quel animal serais-tu curieux de goûter ?"],
-    [catMap['Le Glouton Club'], null, "Cite un aliment que tu détestes."],
-    [catMap['Le Glouton Club'], null, "Quelle est la première chose que tu manges le matin ?"],
-    [catMap['Le Glouton Club'], 4, "Il est minuit, tu as une petite faim, tu ouvres ton frigo, qu'est ce que tu prends instinctivement ?"],
-    [catMap['Le Glouton Club'], 4, "Il est minuit, tu as une petite faim, tu ne veux pas te faire à manger, qu'est ce que tu grignotes ?"],
-    [catMap['Le Glouton Club'], null, "Une sauce que tu aimes."],
-    [catMap['Le Glouton Club'], 5, "Un aliment impossible à manger de manière sexy ?"],
-    [catMap['Le Glouton Club'], 5, "Quelque chose que tu ne mangeras jamais pendant un date ?"],
-    [catMap['Le Glouton Club'], null, "Quel aliment te fais penser à une haleine de poney ?"],
-    [catMap['Le Glouton Club'], null, "Un aliment ou un plat qui te réconforte ?"],
-    [catMap['Le Glouton Club'], null, "Jusqu'à combien de jours après la date de péremption vous pouvez manger un yaourt ?"],
-    [catMap['Le Glouton Club'], null, "La pire chose à trouver dans son assiette au restaurant ?"],
-    [catMap['Le Glouton Club'], null, "Quel plat te fais regretter de l'avoir manger ?"],
-    [catMap['Le Glouton Club'], null, "Quel aliment ne devrait pas se trouver sur une pizza ?"],
-    [catMap['Le Glouton Club'], null, "Qu'est ce qui se mange en apéritif ?"],
-    [catMap['Le Glouton Club'], null, "Qu'est-ce qui se grille au barbecue l'été ?"],
-    [catMap['Le Glouton Club'], null, "Tu dois demander l'addition au restaurant, que fais-tu ?"],
-    [catMap['Le Glouton Club'], null, "Une spécialité culinaire française ? (plats principaux salés)"],
+    [catMap['Le Glouton Club'], null, "Quel animal serais-tu curieux de goûter ?", 0],
+    [catMap['Le Glouton Club'], null, "Le pays avec la nourriture la plus dégueulasse ?", 0],
+    [catMap['Le Glouton Club'], null, "Le plat que tu peux manger tous les jours jusqu'à la fin de ta vie", 0],
+    [catMap['Le Glouton Club'], null, "Quelque chose que tu ne mangerais jamais pendant un date ?", 0],
+    [catMap['Le Glouton Club'], null, "Si Squeezie était un plat, il serait lequel ?", 0],
+    [catMap['Le Glouton Club'], null, "Quelle est la pire sauce ?", 0],
+    [catMap['Le Glouton Club'], null, "Quel est le fruit le plus moche ?", 0],
+    [catMap['Le Glouton Club'], null, "Le truc le plus gênant que tu puisses faire au resto", 0],
+    [catMap['Le Glouton Club'], null, "Ton last meal ? (Dernier repas avant de mourir)", 0],
+    [catMap['Le Glouton Club'], null, "C'est quoi l'ingrédient le plus tue-l'amour ?", 0],
+    [catMap['Le Glouton Club'], null, "Quel est l'aliment qui peut se transformer en sex-toy ?", 18],
+    [catMap['Le Glouton Club'], null, "Pire cuisine du monde ? (pays)", 0],
+    [catMap['Le Glouton Club'], null, "Si tu devais manger une partie d'un corps humain, ça serait laquelle ? (cuit)", 0],
+    [catMap['Le Glouton Club'], null, "L'objet qui serait le meilleur s'il était comestible ?", 0],
     // --- Metronomus ---
-    [catMap['Metronomus'], null, "Un instrument de musique ?"],
-    [catMap['Metronomus'], null, "Un genre de musique ?"],
-    [catMap['Metronomus'], 6, "Quelle musique tu mets pour ambiancer tout le monde en soirée ? (titre et artiste)"],
-    [catMap['Metronomus'], 6, "La soirée bat son plein, tu passes la prochaine musique, qu'est-ce que tu mets ?"],
-    [catMap['Metronomus'], 6, "La soirée bat son plein, tu dois passer la prochaine musique, quel artiste va plaire à tout le monde ?"],
-    [catMap['Metronomus'], null, "Une musique intemporelle ?"],
-    [catMap['Metronomus'], null, "Tu t'occupes de la musique d'un enterrement, qu'est ce que tu mets pour l'arrivée du cercueil ?"],
-    [catMap['Metronomus'], null, "Le plus grand artiste de tous les temps ?"],
-    [catMap['Metronomus'], null, "Le meilleur endroit pour écouter ta musique ?"],
-    [catMap['Metronomus'], 7, "Un objet pour mimer un micro ?"],
-    [catMap['Metronomus'], 7, "Un instrument facile à mimer ?"],
-    [catMap['Metronomus'], null, "Meilleure chanson à chanter au karaoké ?"],
-    [catMap['Metronomus'], null, "L'artiste musical que vous mettez en fond pour baiser ?"],
-    [catMap['Metronomus'], null, "La musique la plus ringarde ?"],
-    [catMap['Metronomus'], null, "La meilleure comptine de tous les temps ?"],
-    [catMap['Metronomus'], null, "Quel Disney a la meilleure musique ?"],
-    [catMap['Metronomus'], null, "Un artiste musical cancel ?"],
-    [catMap['Metronomus'], null, "De quel artiste musical détestes-tu les musiques ?"],
-    [catMap['Metronomus'], null, "Quelqu'un te fait écouter sa musique c'est pas dingue, qu'est ce que tu lui dis pour pas lui faire de la peine ?"],
-    [catMap['Metronomus'], null, "Quel youtubeur a fait la pire musique ?"],
-    [catMap['Metronomus'], 8, "Une danse ?"],
-    [catMap['Metronomus'], 8, "Un type de danse ?"],
-    [catMap['Metronomus'], null, "Une note de musique ?"],
+    [catMap['Metronomus'], null, "L'artiste musical que vous mettez en fond pour baiser ?", 18],
+    [catMap['Metronomus'], null, "Quel artiste musical serait un bon youtuber / youtubeuse", 0],
+    [catMap['Metronomus'], null, "Quel artiste musical décédé tu rêverais d'entendre chanter à ton mariage ?", 0],
+    [catMap['Metronomus'], null, "Cite une danse ?", 0],
+    [catMap['Metronomus'], null, "Quelle est la chanson française qui résumerait le mieux Joyca ?", 0],
+    [catMap['Metronomus'], null, "Cite un instrument de musique insupportable", 0],
+    [catMap['Metronomus'], null, "Cite un artiste musical cancel", 0],
+    [catMap['Metronomus'], null, "Quel youtubeur a fait la pire musique ?", 0],
+    [catMap['Metronomus'], null, "Quel est le meilleur endroit pour écouter de la musique ?", 0],
+    [catMap['Metronomus'], null, "Meilleur objet qui peut servir de micro ?", 0],
+    [catMap['Metronomus'], null, "C'est un/une 10, mais il/elle devient un 4 parce qu'il écoute du…. ? (cite un genre musical)", 0],
     // --- Red carpet ---
-    [catMap['Red carpet'], null, "Un genre de film ?"],
-    [catMap['Red carpet'], null, "Qu'est ce que tu prends au cinéma ? (sauf le popcorn)"],
-    [catMap['Red carpet'], null, "Un méchant de film ?"],
-    [catMap['Red carpet'], null, "Donne l'acteur ou l'actrice que tu trouves le plus beau/belle"],
-    [catMap['Red carpet'], null, "Un chien populaire de films, séries ou dessins animés ?"],
-    [catMap['Red carpet'], null, "Un film qui fait pleurer ?"],
-    [catMap['Red carpet'], 9, "Un objet culte du cinéma ?"],
-    [catMap['Red carpet'], 9, "Un objet de film que tu aimerais avoir dans la vraie vie ?"],
-    [catMap['Red carpet'], null, "Un film français ?"],
-    [catMap['Red carpet'], null, "Qu'est ce qui peut t'énerver quand tu regardes un film avec quelqu'un ?"],
-    [catMap['Red carpet'], null, "Quel youtubeur serait le meilleur acteur ?"],
-    [catMap['Red carpet'], null, "Qu'est ce que tu dirais pour te faire passer pour un cinéphile ?"],
-    [catMap['Red carpet'], null, "Une série (dessin animé ou réel) dont tu connais le générique par coeur ?"],
-    [catMap['Red carpet'], null, "Une réplique de film ?"],
-    [catMap['Red carpet'], 10, "L'émotion la plus dure à jouer ?"],
-    [catMap['Red carpet'], 10, "Une émotion qu'un acteur ou une actrice peut jouer ?"],
+    [catMap['Red carpet'], null, "Quel personnage de dessin animé fait le plus gros caca ?", 0],
+    [catMap['Red carpet'], null, "Un Disney/Pixar qui t'a fait pleurer", 0],
+    [catMap['Red carpet'], null, "Le personnage chauve le plus stylé ? (tous films/dessin animés confondus)", 0],
+    [catMap['Red carpet'], null, "Un méchant de film avec qui tu rêverais d'être pote ?", 0],
+    [catMap['Red carpet'], null, "À partir de combien de temps un film est trop long ? (donnez des chiffres ronds : 1h30 / 1h40 / 1h45 / 2h…)", 0],
+    [catMap['Red carpet'], null, "Une émotion difficile à jouer pour un acteur", 0],
+    [catMap['Red carpet'], null, "Un objet de film que tu aimerais avoir dans la vraie vie ?", 0],
+    [catMap['Red carpet'], null, "Quel youtubeur/youtubeuse serait le meilleur acteur/actrice ?", 0],
+    [catMap['Red carpet'], null, "Quel dessin animé est le plus traumatisant ?", 0],
+    [catMap['Red carpet'], null, "Quelle est la pire comédie française que tu as vu ces 5 dernières années ?", 0],
+    [catMap['Red carpet'], null, "Tu gagnes un césar, qui tu remercies en premier ?", 0],
+    [catMap['Red carpet'], null, "Quel est l'animal culte le plus connu du cinéma ?", 0],
     // --- La situation ---
-    [catMap['La situation'], 11, "C'est quoi le plus important dans la vie ?"],
-    [catMap['La situation'], 11, "Qu'est ce qui te rend heureux dans la vie ?"],
-    [catMap['La situation'], null, "Une insulte ? (courte)"],
-    [catMap['La situation'], null, "Une drogue ou une addiction ? (légale ou illégale)"],
+    [catMap['La situation'], null, "Le pire endroit pour croiser ton ex", 0],
+    [catMap['La situation'], null, "Cite une drogue/une addiction (légale ou illégale)", 0],
+    [catMap['La situation'], null, "Une insulte ringarde que tu peux balancer à quelqu'un", 0],
   ];
 
-  for (const [catId, variantGroup, text] of seedQuestions) {
+  for (const [catId, variantGroup, text, minAge] of seedQuestions) {
     if (!catId) continue;
     const exists = await get("SELECT id FROM questions WHERE text = $1", [text]);
     if (!exists) {
       if (variantGroup !== null) {
-        await run("INSERT INTO questions (category_id, text, variant_group) VALUES ($1, $2, $3)", [catId, text, variantGroup]);
+        await run("INSERT INTO questions (category_id, text, variant_group, min_age) VALUES ($1, $2, $3, $4)", [catId, text, variantGroup, minAge || 0]);
       } else {
-        await run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
+        await run("INSERT INTO questions (category_id, text, min_age) VALUES ($1, $2, $3)", [catId, text, minAge || 0]);
       }
     }
   }
@@ -231,8 +208,10 @@ async function init() {
 
 const THRESHOLD = parseInt(process.env.SURVEY_THRESHOLD, 10) || 10000;
 
-async function getAvailableQuestion(excludeIds) {
+async function getAvailableQuestion(excludeIds, userAge) {
+  const age = typeof userAge === 'number' && userAge > 0 ? userAge : 0;
   // Also exclude questions that share a variant_group with any already-answered question
+  // Also exclude questions where min_age > user's age
   if (isPostgres) {
     const rows = await all(
       `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q JOIN categories c ON c.id = q.category_id
@@ -242,8 +221,9 @@ async function getAvailableQuestion(excludeIds) {
          AND (q.variant_group IS NULL OR q.variant_group NOT IN (
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id = ANY($2::int[])
          ))
+         AND COALESCE(q.min_age, 0) <= $3
        ORDER BY RANDOM() LIMIT 1`,
-      [THRESHOLD, excludeIds]
+      [THRESHOLD, excludeIds, age]
     );
     return rows[0] || null;
   } else {
@@ -255,8 +235,9 @@ async function getAvailableQuestion(excludeIds) {
          AND (q.variant_group IS NULL OR q.variant_group NOT IN (
            SELECT DISTINCT q2.variant_group FROM questions q2 WHERE q2.variant_group IS NOT NULL AND q2.id IN (SELECT value FROM json_each(?))
          ))
+         AND COALESCE(q.min_age, 0) <= ?
        ORDER BY RANDOM() LIMIT 1`
-    ).get(THRESHOLD, JSON.stringify(excludeIds), JSON.stringify(excludeIds)) || null;
+    ).get(THRESHOLD, JSON.stringify(excludeIds), JSON.stringify(excludeIds), age) || null;
   }
 }
 

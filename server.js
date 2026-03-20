@@ -224,7 +224,8 @@ const LONG_ANSWER_PATTERNS = ['réplique de film'];
 app.get('/api/questions/next', async (req, res) => {
   try {
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
-    const q = await db.getAvailableQuestion(ex);
+    const age = parseInt(req.query.age, 10) || 0;
+    const q = await db.getAvailableQuestion(ex, age);
     if (!q) return res.json({ done: true });
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
     res.json({ id: q.id, text: q.text, club: q.club, maxLength: isLong ? 80 : 20 });

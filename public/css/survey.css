@@ -50,6 +50,22 @@ body{
 .live-dot{width:7px;height:7px;border-radius:50%;background:#22C55E;animation:dotPulse 2s ease infinite;flex-shrink:0}
 .already-text{font-size:13px;color:rgba(255,255,255,0.2);margin-top:16px}
 
+/* ===== DEMOGRAPHICS ===== */
+.demo-wrap{margin:20px 0 4px}
+.demo-row{display:flex;gap:14px;align-items:flex-start}
+.demo-field{flex:1;text-align:left}
+.demo-label{display:block;font-size:13px;font-weight:700;color:rgba(255,255,255,0.45);margin-bottom:8px}
+.age-input-group{display:flex;align-items:center;gap:8px}
+.age-field{width:80px;padding:12px 14px;font-size:18px;font-weight:700;font-family:'Nunito',sans-serif;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.07);border-radius:12px;color:#fff;outline:none;text-align:center;transition:border-color 0.25s ease;-moz-appearance:textfield}
+.age-field::-webkit-inner-spin-button,.age-field::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.age-field:focus{border-color:rgba(255,255,255,0.25)}
+.age-field::placeholder{color:rgba(255,255,255,0.15)}
+.age-suffix{font-size:14px;font-weight:700;color:rgba(255,255,255,0.35)}
+.gender-buttons{display:flex;gap:6px}
+.gender-btn{padding:10px 12px;font-size:13px;font-weight:700;font-family:'Nunito',sans-serif;background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.07);border-radius:10px;color:rgba(255,255,255,0.45);cursor:pointer;transition:all 0.25s ease;flex:1;text-align:center}
+.gender-btn:hover{border-color:rgba(255,255,255,0.15);color:rgba(255,255,255,0.65)}
+.gender-btn.selected{border-color:rgba(155,143,255,0.5);background:rgba(155,143,255,0.12);color:#fff}
+
 /* ===== BUTTONS ===== */
 .btn-primary{display:block;width:100%;padding:16px 32px;font-size:16px;font-weight:800;color:#fff;background:linear-gradient(135deg,#FF6B8A 0%,#FF8E72 100%);border:none;border-radius:16px;box-shadow:0 4px 24px rgba(255,107,138,0.3);cursor:pointer;font-family:'Nunito',sans-serif;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1)}
 .btn-primary:hover{transform:translateY(-2px)}

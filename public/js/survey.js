@@ -7,6 +7,8 @@
 
   const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
   let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
+  let userAge = parseInt(localStorage.getItem('user_age'), 10) || 0;
+  let userGender = localStorage.getItem('user_gender') || '';
 
   const $ = id => document.getElementById(id);
   const screens = ['welcome', 'question', 'registered', 'timeout', 'done', 'error'];
@@ -145,20 +147,50 @@
   // ============================================================
   const checks = [false, false, false];
 
+  function canStart() {
+    const allChecked = checks.every(Boolean);
+    const ageVal = parseInt($('age-input').value, 10);
+    const ageOk = ageVal > 0 && ageVal <= 120;
+    const genderOk = !!userGender;
+    return allChecked && ageOk && genderOk;
+  }
+
   function updateCheckboxes() {
     document.querySelectorAll('.check-card').forEach(card => {
       const i = parseInt(card.dataset.rule);
       card.classList.toggle('checked', checks[i]);
       card.querySelector('.checkbox').textContent = checks[i] ? '✓' : '';
     });
-    const allChecked = checks.every(Boolean);
-    $('btn-start').classList.toggle('disabled', !allChecked);
+    $('btn-start').classList.toggle('disabled', !canStart());
   }
 
   document.querySelectorAll('.check-card').forEach(card => {
     card.addEventListener('click', () => {
       const i = parseInt(card.dataset.rule);
       checks[i] = !checks[i];
+      updateCheckboxes();
+    });
+  });
+
+  // Age input
+  const ageInput = $('age-input');
+  const savedAge = localStorage.getItem('user_age');
+  if (savedAge) ageInput.value = savedAge;
+  ageInput.addEventListener('input', updateCheckboxes);
+
+  // Gender buttons
+  const savedGender = localStorage.getItem('user_gender');
+  if (savedGender) {
+    userGender = savedGender;
+    document.querySelectorAll('.gender-btn').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.gender === savedGender);
+    });
+  }
+  document.querySelectorAll('.gender-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      userGender = btn.dataset.gender;
+      document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
       updateCheckboxes();
     });
   });
@@ -280,7 +312,7 @@
     stopTimer();
     setPulse(0);
     try {
-      const res = await fetch('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds])));
+      const res = await fetch('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds])) + '&age=' + (userAge || 0));
       const data = await res.json();
       if (data.done) {
         $('done-text').textContent = answeredIds.size > 0
@@ -397,7 +429,13 @@
   // EVENTS
   // ============================================================
   $('btn-start').addEventListener('click', () => {
-    if (checks.every(Boolean)) { updateAlready(); loadNext(); }
+    if (canStart()) {
+      userAge = parseInt($('age-input').value, 10);
+      localStorage.setItem('user_age', userAge);
+      localStorage.setItem('user_gender', userGender);
+      updateAlready();
+      loadNext();
+    }
   });
   $('btn-retry').addEventListener('click', loadNext);
   $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
