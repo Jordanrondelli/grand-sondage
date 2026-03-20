@@ -3,48 +3,72 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tournage — Affichage</title>
-  <link rel="stylesheet" href="/css/tournage.css?v=1">
+  <title>Tournage — Plateau</title>
+  <link rel="stylesheet" href="/css/tournage.css?v=6">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,sans-serif;color:#fff}
-    .login-overlay{position:fixed;inset:0;background:#000;z-index:100;display:flex;align-items:center;justify-content:center}
-    .login-overlay.hidden{display:none}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff}
   </style>
 </head>
 <body>
-  <!-- Login overlay (for separate device) -->
-  <div id="login-overlay" class="login-overlay hidden">
+  <!-- Login overlay -->
+  <div id="login-overlay" class="login-overlay hidden" style="position:fixed;inset:0;background:#000;z-index:100;display:flex;align-items:center;justify-content:center">
     <div style="text-align:center">
       <div style="font-size:40px;margin-bottom:16px">🎬</div>
-      <h2 style="font-size:18px;margin-bottom:20px;color:#fff">Affichage Tournage</h2>
-      <input type="password" id="display-pw" placeholder="Mot de passe admin" style="width:240px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:16px;outline:none;text-align:center;margin-bottom:12px;display:block">
-      <div id="display-err" style="color:#E94560;font-size:13px;margin-bottom:10px;min-height:18px"></div>
-      <button id="display-login-btn" style="background:#E94560;color:#fff;border:none;border-radius:12px;padding:14px 44px;font-size:16px;font-weight:700;cursor:pointer">Connecter</button>
+      <h2 style="font-size:18px;margin-bottom:20px;color:#fff;font-family:'Outfit',sans-serif">Affichage Plateau</h2>
+      <input type="password" id="display-pw" placeholder="Mot de passe admin" style="width:240px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:#fff;font-size:16px;outline:none;text-align:center;margin-bottom:12px;display:block;font-family:'Space Grotesk',sans-serif">
+      <div id="display-err" style="color:#F87171;font-size:13px;margin-bottom:10px;min-height:18px"></div>
+      <button id="display-login-btn" style="background:#E94560;color:#fff;border:none;border-radius:12px;padding:14px 44px;font-size:16px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif">Connecter</button>
     </div>
   </div>
 
   <div class="display-container" id="display-container">
-    <!-- Idle state: club name -->
-    <div class="display-club" id="display-club"></div>
+    <!-- Ambient BG -->
+    <div class="display-bg"></div>
+    <div class="display-scanline"></div>
 
-    <!-- Answer reveal -->
-    <div class="display-answer" id="display-answer" style="display:none">
-      <div class="display-answer-text" id="display-answer-text"></div>
+    <!-- Flash overlay (for hors panel) -->
+    <div class="display-flash" id="display-flash"></div>
+    <!-- Color tint overlay (for score reveal) -->
+    <div class="display-tint" id="display-tint"></div>
+    <!-- Red vignette (hors panel) -->
+    <div class="display-vignette" id="display-vignette"></div>
+
+    <!-- Content -->
+    <div class="display-content" id="display-content">
+      <!-- Answer text -->
+      <div class="display-answer" id="display-answer">
+        <div class="display-answer-text" id="display-answer-text"></div>
+        <div class="display-glow-line" id="display-glow-line"></div>
+      </div>
+
+      <!-- Score (appears below answer) -->
+      <div class="display-score-wrap" id="display-score-wrap">
+        <span class="display-score-num" id="display-score-num"></span>
+        <span class="display-score-unit">/100</span>
+      </div>
     </div>
 
-    <!-- Score reveal -->
-    <div class="display-score" id="display-score" style="display:none">
-      <span class="display-score-num" id="display-score-num"></span>
-      <span class="display-score-unit">/100</span>
-    </div>
-
-    <!-- Hors panel X -->
-    <div class="display-hors-panel" id="display-hors-panel" style="display:none">
-      <div class="display-x">✕</div>
+    <!-- Hors panel cross overlay -->
+    <div class="display-hp-overlay" id="display-hp-overlay">
+      <div class="display-hp-cross" id="display-hp-cross">
+        <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="30" y1="30" x2="210" y2="210" stroke="#EF4444" stroke-width="32" stroke-linecap="round"/>
+          <line x1="210" y1="30" x2="30" y2="210" stroke="#EF4444" stroke-width="32" stroke-linecap="round"/>
+          <!-- Glow layer -->
+          <line x1="30" y1="30" x2="210" y2="210" stroke="#EF4444" stroke-width="32" stroke-linecap="round" opacity="0.3" filter="url(#crossGlow)"/>
+          <line x1="210" y1="30" x2="30" y2="210" stroke="#EF4444" stroke-width="32" stroke-linecap="round" opacity="0.3" filter="url(#crossGlow)"/>
+          <defs>
+            <filter id="crossGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="12" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+        </svg>
+      </div>
     </div>
   </div>
 
-  <script src="/js/tournage-display.js?v=4"></script>
+  <script src="/js/tournage-display.js?v=7"></script>
 </body>
 </html>

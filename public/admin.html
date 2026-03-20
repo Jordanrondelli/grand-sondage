@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Le Sondage</title>
-  <link rel="stylesheet" href="/css/style.css?v=5">
+  <link rel="stylesheet" href="/css/style.css?v=9">
 </head>
 <body>
   <nav class="nav">
@@ -24,11 +24,38 @@
 
   <div id="screen-dashboard" class="screen top-align">
     <div class="admin-wrap">
+
+      <!-- Survey selector -->
+      <div class="survey-bar" id="survey-bar">
+        <div class="survey-tabs" id="survey-tabs"></div>
+        <button class="btn-new-survey" id="btn-new-survey">+ Nouveau sondage</button>
+      </div>
+
       <!-- Stats -->
       <div class="stats-row">
         <div class="stat-card"><div class="stat-num" id="s-total">0</div><div class="stat-label">réponses</div></div>
         <div class="stat-card"><div class="stat-num" id="s-complete">0/0</div><div class="stat-label">complètes</div></div>
         <div class="stat-card"><div class="stat-num" id="s-pct">0%</div><div class="stat-label">progression</div></div>
+      </div>
+      <div class="demo-stats-row" id="demo-stats-row">
+        <span class="demo-stat" id="ds-hommes">👨 0 hommes</span>
+        <span class="demo-stat" id="ds-femmes">👩 0 femmes</span>
+        <span class="demo-stat" id="ds-adults">🔞 0 adultes (18+)</span>
+        <span class="demo-stat" id="ds-minors">👶 0 mineurs</span>
+      </div>
+      <!-- Age distribution -->
+      <div class="age-panel" id="age-panel" style="display:none">
+        <div class="age-panel-header">
+          <span class="age-panel-title">📊 Répartition par âge</span>
+          <span class="age-panel-avg" id="age-avg"></span>
+        </div>
+        <div class="age-chart" id="age-chart"></div>
+        <div class="age-panel-footer" id="age-footer"></div>
+      </div>
+
+      <div class="representative-toggle" id="representative-toggle">
+        <label class="toggle-label">Vue échantillon représentatif (50/50 H/F, 18+ only)</label>
+        <button class="toggle-btn off" id="btn-representative">OFF</button>
       </div>
 
       <!-- Actions -->
@@ -50,6 +77,12 @@
       <div class="setting-toggle">
         <span class="toggle-label">🎬 Affichage vidéo (résultats /100)</span>
         <button class="toggle-btn off" id="btn-video-mode">Désactivé</button>
+      </div>
+
+      <!-- Allow skip toggle -->
+      <div class="setting-toggle">
+        <span class="toggle-label">⏭ Autoriser le skip de questions</span>
+        <button class="toggle-btn on" id="btn-allow-skip">Activé</button>
       </div>
 
       <!-- Editor -->
@@ -87,6 +120,11 @@
         </div>
       </div>
 
+      <!-- Search -->
+      <div class="search-wrap">
+        <input class="search-input" id="search-input" placeholder="🔍 Rechercher une question...">
+      </div>
+
       <!-- Filters -->
       <div class="filter-pills" id="filter-pills"></div>
 
@@ -94,15 +132,15 @@
       <div class="q-cards" id="q-cards"></div>
 
       <!-- Reset -->
-      <button class="btn-reset" id="btn-reset">🗑️ Réinitialiser les données</button>
+      <button class="btn-reset" id="btn-reset">🗑️ Réinitialiser les données de ce sondage</button>
       <div class="confirm-reset" id="confirm-reset" style="display:none">
-        <p>⚠️ Irréversible. Toutes les réponses seront supprimées.</p>
+        <p>⚠️ Irréversible. Toutes les réponses <strong>de ce sondage</strong> seront supprimées.</p>
         <button class="yes" id="reset-yes">Supprimer</button>
         <button class="no" id="reset-no">Annuler</button>
       </div>
     </div>
   </div>
 
-  <script src="/js/admin.js?v=10"></script>
+  <script src="/js/admin.js?v=17"></script>
 </body>
 </html>

@@ -5,13 +5,37 @@
   const CLUB_HUES = { 'Le Glouton Club': 30, 'Metronomus': 280, 'Red carpet': 340, 'La situation': 180 };
   const CONFETTI_COLORS = ['#FF6B8A', '#FFB347', '#9B8FFF', '#22C55E', '#FF8E72', '#C4B5FD', '#FFDA77'];
 
-  const answeredIds = new Set(JSON.parse(localStorage.getItem('answered') || '[]'));
-  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 20;
-  let userAge = parseInt(localStorage.getItem('user_age'), 10) || 0;
-  let userGender = localStorage.getItem('user_gender') || '';
+  // Survey ID from URL ?s=<id> or from slug (path like /mon-sondage)
+  let surveyId = new URLSearchParams(window.location.search).get('s') || '';
+  const slug = (!surveyId && window.location.pathname !== '/' && !window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/tournage'))
+    ? window.location.pathname.replace(/^\//, '').replace(/\/$/, '') : '';
+
+  // Will be set after init resolves slug → id
+  let storageKey, apiSuffix, answeredIds, demoKey, demographics, respondentId;
+  let currentQ = null, timer = null, timeLeft = DURATION, pendingAnswer = null, currentHue = 260, currentMaxLen = 40;
+  let countdownTimer = null, countdownLeft = 15, skipAllowed = true;
+
+  function generateId() {
+    return 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16)) + '-' + Date.now().toString(36);
+  }
+
+  function initSurveyKeys() {
+    storageKey = surveyId ? 'answered_s' + surveyId : 'answered';
+    apiSuffix = surveyId ? (url => url + (url.includes('?') ? '&' : '?') + 's=' + surveyId) : (url => url);
+    answeredIds = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
+    demoKey = surveyId ? 'demo_s' + surveyId : 'demo';
+    demographics = JSON.parse(localStorage.getItem(demoKey) || 'null');
+    // Unique respondent ID per survey — persists in localStorage
+    const ridKey = surveyId ? 'rid_s' + surveyId : 'rid';
+    respondentId = localStorage.getItem(ridKey);
+    if (!respondentId) {
+      respondentId = generateId();
+      localStorage.setItem(ridKey, respondentId);
+    }
+  }
 
   const $ = id => document.getElementById(id);
-  const screens = ['welcome', 'question', 'registered', 'timeout', 'done', 'error'];
+  const screens = ['welcome', 'demographics', 'reminder', 'question', 'registered', 'timeout', 'done'];
 
   function show(name) {
     screens.forEach(s => $('screen-' + s).classList.remove('active'));
@@ -147,50 +171,41 @@
   // ============================================================
   const checks = [false, false, false];
 
-  function canStart() {
-    const allChecked = checks.every(Boolean);
-    const ageVal = parseInt($('age-input').value, 10);
-    const ageOk = ageVal > 0 && ageVal <= 120;
-    const genderOk = !!userGender;
-    return allChecked && ageOk && genderOk;
-  }
-
   function updateCheckboxes() {
     document.querySelectorAll('.check-card').forEach(card => {
       const i = parseInt(card.dataset.rule);
       card.classList.toggle('checked', checks[i]);
       card.querySelector('.checkbox').textContent = checks[i] ? '✓' : '';
     });
-    $('btn-start').classList.toggle('disabled', !canStart());
+    const allChecked = checks.every(Boolean);
+    const canStart = allChecked && countdownLeft <= 0;
+    const btn = $('btn-start');
+    btn.classList.toggle('disabled', !canStart);
+    if (allChecked && countdownLeft > 0) {
+      btn.textContent = 'Patiente encore... (' + countdownLeft + 's)';
+    } else if (allChecked) {
+      btn.textContent = "C'est parti";
+    } else if (countdownLeft > 0) {
+      btn.textContent = 'Lis bien les règles... (' + countdownLeft + 's)';
+    } else {
+      btn.textContent = 'Coche les règles ci-dessus';
+    }
+  }
+
+  function startCountdown() {
+    countdownLeft = 15;
+    updateCheckboxes();
+    countdownTimer = setInterval(() => {
+      countdownLeft--;
+      if (countdownLeft <= 0) { clearInterval(countdownTimer); countdownTimer = null; countdownLeft = 0; }
+      updateCheckboxes();
+    }, 1000);
   }
 
   document.querySelectorAll('.check-card').forEach(card => {
     card.addEventListener('click', () => {
       const i = parseInt(card.dataset.rule);
       checks[i] = !checks[i];
-      updateCheckboxes();
-    });
-  });
-
-  // Age input
-  const ageInput = $('age-input');
-  const savedAge = localStorage.getItem('user_age');
-  if (savedAge) ageInput.value = savedAge;
-  ageInput.addEventListener('input', updateCheckboxes);
-
-  // Gender buttons
-  const savedGender = localStorage.getItem('user_gender');
-  if (savedGender) {
-    userGender = savedGender;
-    document.querySelectorAll('.gender-btn').forEach(btn => {
-      btn.classList.toggle('selected', btn.dataset.gender === savedGender);
-    });
-  }
-  document.querySelectorAll('.gender-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      userGender = btn.dataset.gender;
-      document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
       updateCheckboxes();
     });
   });
@@ -276,13 +291,74 @@
   }
 
   // ============================================================
+  // CLIENT-SIDE GIBBERISH CHECK
+  // ============================================================
+  function looksLikeGibberish(text) {
+    const s = text.replace(/[\s'''-]/g, '');
+    if (s.length < 2) return true;
+    if (/^(.)\1+$/.test(s)) return true;
+    if (!/[aeiouyàâäéèêëïîôùûüÿœæ0-9]/i.test(s)) return true;
+    if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(s)) return true;
+    if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(s)) return true;
+    if (s.length >= 6) {
+      const freq = {};
+      for (const ch of s) freq[ch] = (freq[ch] || 0) + 1;
+      if (Math.max(...Object.values(freq)) / s.length > 0.6) return true;
+    }
+    if (/^(.{1,3})\1{2,}$/i.test(s)) return true;
+    if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(s)) return true;
+    return false;
+  }
+
+  function shakeInput() {
+    const group = $('input-group');
+    const inp = $('answer-input');
+    group.classList.remove('shake');
+    void group.offsetWidth;
+    group.classList.add('shake');
+    inp.classList.add('blocked');
+    inp.disabled = true;
+    setTimeout(() => {
+      inp.classList.remove('blocked');
+      inp.disabled = false;
+      inp.focus();
+    }, 800);
+  }
+
+  // ============================================================
   // INPUT
   // ============================================================
   const input = $('answer-input');
   const btnVal = $('btn-validate');
   input.addEventListener('input', () => {
-    btnVal.classList.toggle('disabled', !input.value.trim());
+    const val = input.value;
+    // Hard block if over maxLength (extra safety)
+    if (currentMaxLen < 200 && val.length > currentMaxLen) {
+      input.value = val.slice(0, currentMaxLen);
+      shakeInput();
+      return;
+    }
+    // Check gibberish on 3+ chars
+    if (val.trim().length >= 3 && looksLikeGibberish(val.trim())) {
+      shakeInput();
+      return;
+    }
+    btnVal.classList.toggle('disabled', !val.trim());
+    updateCharCount();
   });
+
+  function updateCharCount() {
+    var rem = $('input-reminder');
+    if (!rem) return;
+    if (currentMaxLen >= 200) {
+      rem.textContent = input.value.length + ' caractères';
+      rem.style.color = 'rgba(255,180,100,0.5)';
+    } else {
+      var left = currentMaxLen - input.value.length;
+      rem.textContent = left + ' / ' + currentMaxLen + ' caractères';
+      rem.style.color = left <= 3 ? 'rgba(255,80,80,0.9)' : left <= 8 ? 'rgba(255,180,100,0.8)' : 'rgba(255,180,100,0.5)';
+    }
+  }
 
   // ============================================================
   // WELCOME
@@ -296,7 +372,7 @@
 
   async function loadParticipantCount() {
     try {
-      const res = await fetch('/api/stats/participants');
+      const res = await fetch(apiSuffix('/api/stats/participants'));
       const data = await res.json();
       if (data.count > 0) {
         $('participant-text').textContent = data.count.toLocaleString() + ' personnes ont déjà participé';
@@ -312,7 +388,9 @@
     stopTimer();
     setPulse(0);
     try {
-      const res = await fetch('/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds])) + '&age=' + (userAge || 0));
+      let nextUrl = '/api/questions/next?exclude=' + encodeURIComponent(JSON.stringify([...answeredIds]));
+      if (demographics) nextUrl += '&gender=' + demographics.gender + '&age=' + demographics.age;
+      const res = await fetch(apiSuffix(nextUrl));
       const data = await res.json();
       if (data.done) {
         $('done-text').textContent = answeredIds.size > 0
@@ -324,26 +402,28 @@
         return;
       }
       currentQ = data;
-      currentMaxLen = data.maxLength || 20;
+      currentMaxLen = data.maxLength || 40;
       const hue = CLUB_HUES[data.club] || 260;
       setHue(hue);
       $('q-text').textContent = data.text;
       input.value = '';
       input.disabled = false;
-      input.maxLength = currentMaxLen;
-      input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
+      if (currentMaxLen >= 200) {
+        input.removeAttribute('maxLength');
+        input.placeholder = 'Ta réponse...';
+      } else {
+        input.maxLength = currentMaxLen;
+        input.placeholder = 'Ta réponse... (' + currentMaxLen + ' car. max)';
+      }
+      updateCharCount();
       btnVal.classList.add('disabled');
       $('phase-input').style.display = '';
       $('phase-confirm').style.display = 'none';
+      $('btn-skip').style.display = skipAllowed ? '' : 'none';
       show('question');
       input.focus();
       startTimer();
-    } catch (err) {
-      console.error('loadNext error:', err);
-      $('error-text').textContent = 'Une erreur est survenue. Vérifie ta connexion et réessaie.';
-      show('error');
-      setHue(0);
-    }
+    } catch { show('done'); setHue(150); }
   }
 
   // ============================================================
@@ -352,6 +432,7 @@
   function showConfirmation() {
     const val = input.value.trim();
     if (!val || !currentQ) return;
+    if (looksLikeGibberish(val)) { shakeInput(); return; }
     pendingAnswer = val;
     stopTimer();
     setPulse(0);
@@ -369,7 +450,7 @@
     if (!pendingAnswer || !currentQ) return;
     const rt = getResponseTime();
     try {
-      const resp = await fetch('/api/answers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt }) });
+      const resp = await fetch(apiSuffix('/api/answers'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_id: currentQ.id, text: pendingAnswer, response_time: rt, survey_id: surveyId ? Number(surveyId) : undefined, gender: demographics?.gender, age: demographics?.age, respondent_id: respondentId }) });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         if (err.troll) {
@@ -386,7 +467,7 @@
       }
     } catch {}
     answeredIds.add(currentQ.id);
-    localStorage.setItem('answered', JSON.stringify([...answeredIds]));
+    localStorage.setItem(storageKey, JSON.stringify([...answeredIds]));
     updateAlready();
     pendingAnswer = null;
     // Gamification
@@ -417,9 +498,9 @@
   function skip() {
     stopTimer();
     if (currentQ) {
-      fetch('/api/questions/' + currentQ.id + '/skip', { method: 'POST' }).catch(() => {});
+      fetch(apiSuffix('/api/questions/' + currentQ.id + '/skip'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ survey_id: surveyId ? Number(surveyId) : undefined }) }).catch(() => {});
       answeredIds.add(currentQ.id);
-      localStorage.setItem('answered', JSON.stringify([...answeredIds]));
+      localStorage.setItem(storageKey, JSON.stringify([...answeredIds]));
       updateAlready();
     }
     loadNext();
@@ -428,16 +509,102 @@
   // ============================================================
   // EVENTS
   // ============================================================
+  // Fetch skip setting — called from boot() after slug resolution
+  function loadSkipSetting() {
+    fetch(apiSuffix('/api/settings/allow-skip')).then(r => r.json()).then(d => {
+      skipAllowed = d.enabled;
+      $('btn-skip').style.display = skipAllowed ? '' : 'none';
+    }).catch(() => {});
+  }
+
   $('btn-start').addEventListener('click', () => {
-    if (canStart()) {
-      userAge = parseInt($('age-input').value, 10);
-      localStorage.setItem('user_age', userAge);
-      localStorage.setItem('user_gender', userGender);
+    if (checks.every(Boolean) && countdownLeft <= 0) {
       updateAlready();
-      loadNext();
+      if (demographics) { show('reminder'); startReminderCountdown(); } else { show('demographics'); }
     }
   });
-  $('btn-retry').addEventListener('click', loadNext);
+
+  // ============================================================
+  // DEMOGRAPHICS
+  // ============================================================
+  (function initDemoScreen() {
+    let selectedGender = null;
+    const genderBtns = document.querySelectorAll('.demo-gender-btn');
+    const ageInput = $('demo-age');
+    const ageError = $('demo-age-error');
+    const startBtn = $('btn-demo-start');
+
+    function getValidAge() {
+      const val = ageInput.value.trim();
+      if (!/^\d{2}$/.test(val)) return null;
+      const n = Number(val);
+      return (n >= 10 && n <= 77) ? n : null;
+    }
+
+    function updateDemoBtn() {
+      const ageOk = getValidAge() !== null;
+      startBtn.classList.toggle('disabled', !selectedGender || !ageOk);
+      if (ageInput.value.trim() && !ageOk) {
+        ageError.textContent = 'Entre un âge valide (2 chiffres, entre 10 et 77)';
+      } else {
+        ageError.textContent = '';
+      }
+    }
+
+    // Only allow digits
+    ageInput.addEventListener('input', () => {
+      ageInput.value = ageInput.value.replace(/[^0-9]/g, '');
+      updateDemoBtn();
+    });
+    ageInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); startBtn.click(); }
+    });
+
+    genderBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        genderBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedGender = btn.dataset.gender;
+        updateDemoBtn();
+      });
+    });
+
+    startBtn.addEventListener('click', () => {
+      const age = getValidAge();
+      if (!selectedGender || !age) return;
+      demographics = { gender: selectedGender, age: age };
+      localStorage.setItem(demoKey, JSON.stringify(demographics));
+      show('reminder');
+      startReminderCountdown();
+    });
+  })();
+
+  // ============================================================
+  // REMINDER COUNTDOWN
+  // ============================================================
+  let reminderTimer = null;
+  function startReminderCountdown() {
+    let left = 10;
+    const btn = $('btn-reminder-go');
+    btn.classList.add('disabled');
+    btn.textContent = 'Lis bien... (' + left + ')';
+    reminderTimer = setInterval(() => {
+      left--;
+      if (left <= 0) {
+        clearInterval(reminderTimer);
+        btn.classList.remove('disabled');
+        btn.textContent = 'J\'ai compris, c\'est parti !';
+      } else {
+        btn.textContent = 'Lis bien... (' + left + ')';
+      }
+    }, 1000);
+  }
+
+  $('btn-reminder-go').addEventListener('click', () => {
+    if ($('btn-reminder-go').classList.contains('disabled')) return;
+    loadNext();
+  });
+
   $('btn-validate').addEventListener('click', () => { if (!btnVal.classList.contains('disabled')) showConfirmation(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!btnVal.classList.contains('disabled')) showConfirmation(); } });
   $('btn-confirm-yes').addEventListener('click', confirmSubmit);
@@ -449,9 +616,44 @@
   // ============================================================
   // INIT
   // ============================================================
-  initBackground();
-  initLogo();
-  updateAlready();
-  updateCheckboxes();
-  loadParticipantCount();
+  async function boot() {
+    // Resolve slug → survey ID if needed
+    if (slug && !surveyId) {
+      try {
+        const r = await fetch('/api/survey-info?slug=' + encodeURIComponent(slug));
+        const d = await r.json();
+        if (d.id) surveyId = String(d.id);
+      } catch (e) { /* fallback: no survey */ }
+    }
+    initSurveyKeys();
+
+    // Check demo_version — if server bumped it, clear local demographics
+    if (surveyId) {
+      try {
+        const r = await fetch('/api/survey-info?s=' + surveyId);
+        const d = await r.json();
+        if (d.demo_version) {
+          const vKey = 'demo_v_s' + surveyId;
+          const localV = Number(localStorage.getItem(vKey) || '0');
+          if (localV && localV < d.demo_version) {
+            // Server reset demographics — clear local data + generate new respondent ID
+            localStorage.removeItem(demoKey);
+            demographics = null;
+            const ridKey = surveyId ? 'rid_s' + surveyId : 'rid';
+            respondentId = generateId();
+            localStorage.setItem(ridKey, respondentId);
+          }
+          localStorage.setItem(vKey, String(d.demo_version));
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    initBackground();
+    initLogo();
+    updateAlready();
+    startCountdown();
+    loadParticipantCount();
+    loadSkipSetting();
+  }
+  boot();
 })();

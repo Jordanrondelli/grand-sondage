@@ -141,11 +141,66 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .arrow-sep{color:var(--text-gray);font-size:16px;padding:0 4px}
 
 /* Auto-merge toggle */
+/* Survey bar */
+.survey-bar{display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.survey-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.survey-tab{background:transparent;border:1px solid #333;color:var(--text-gray);border-radius:10px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.survey-tab.active{background:#333;border-color:#555;color:#fff}
+.survey-tab.is-active-survey{border-color:var(--green);box-shadow:0 0 8px rgba(34,197,94,.3)}
+.survey-active-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 6px var(--green)}
+.survey-tab-actions{display:inline-flex;gap:3px;margin-left:4px}
+.survey-tab-actions button{background:none;border:none;color:var(--text-gray);cursor:pointer;font-size:11px;padding:2px;line-height:1}
+.survey-tab-actions button:hover{color:#fff}
+.btn-new-survey{background:transparent;border:1px dashed #444;color:var(--text-gray);border-radius:10px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-new-survey:hover{border-color:#888;color:#fff}
+.survey-url-box{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;margin-bottom:20px}
+.survey-url-label{font-size:12px;color:var(--text-gray);display:block;margin-bottom:6px}
+.survey-url-label strong{color:var(--text-light)}
+.survey-url-row{display:flex;gap:6px;align-items:center}
+.survey-url-input{flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 10px;color:#fff;font-size:13px;font-family:ui-monospace,monospace;outline:none}
+.survey-url-copy{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;transition:all .15s}
+.survey-url-copy:hover{background:rgba(255,255,255,.15)}
+.survey-url-status{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;margin-left:6px;letter-spacing:.5px;vertical-align:middle}
+.survey-url-status.on{background:var(--green);color:#000}
+.survey-url-status.off{background:#555;color:#ccc}
+
+.btn-survey-toggle{border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:.3px}
+.btn-survey-activate{background:var(--green);color:#fff;box-shadow:0 0 16px rgba(34,197,94,.4)}
+.btn-survey-activate:hover{background:#1db04f;box-shadow:0 0 24px rgba(34,197,94,.5)}
+.btn-survey-deactivate{background:var(--danger);color:#fff;box-shadow:0 0 16px rgba(239,68,68,.3)}
+.btn-survey-deactivate:hover{background:#d93a3a;box-shadow:0 0 24px rgba(239,68,68,.4)}
+
+.demo-stats-row{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:12px;justify-content:center}
+.demo-stat{font-size:12px;color:var(--text-gray);background:rgba(255,255,255,.04);padding:4px 10px;border-radius:8px}
+/* Age distribution panel */
+.age-panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+.age-panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.age-panel-title{font-size:14px;font-weight:600;color:var(--text-light)}
+.age-panel-avg{font-size:13px;color:var(--green);font-weight:700;font-family:ui-monospace,monospace}
+.age-chart{display:flex;flex-direction:column;gap:6px}
+.age-bar-row{display:flex;align-items:center;gap:8px}
+.age-bar-label{font-size:11px;color:var(--text-gray);min-width:40px;text-align:right;font-family:ui-monospace,monospace}
+.age-bar-track{flex:1;height:16px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden}
+.age-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#7B68EE,#9B8FFF);transition:width .3s}
+.age-bar-fill.minor{background:linear-gradient(90deg,#F59E0B,#FFDA77)}
+.age-bar-val{font-size:11px;color:var(--text-light);min-width:75px;font-family:ui-monospace,monospace}
+.age-bar-val small{color:var(--text-gray)}
+.age-panel-footer{margin-top:10px;font-size:11px;color:var(--text-gray);text-align:center}
+
+.representative-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+.q-card-gender-counts{display:flex;gap:8px;font-size:11px;font-weight:600;margin-top:4px;justify-content:flex-end}
+
 .setting-toggle{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:20px}
 .toggle-label{font-size:12px;color:var(--text-gray)}
 .toggle-btn{border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;color:#fff;transition:background .2s}
 .toggle-btn.on{background:var(--green)}
 .toggle-btn.off{background:#444}
+
+/* Search */
+.search-wrap{margin-bottom:16px}
+.search-input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;color:#fff;font-size:14px;outline:none;font-family:inherit}
+.search-input::placeholder{color:var(--text-dark)}
+.search-input:focus{border-color:rgba(255,255,255,.2)}
 
 /* Filter pills */
 .filter-pills{display:flex;gap:6px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
@@ -161,8 +216,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .club-label{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-gray);text-transform:uppercase;letter-spacing:1px}
 .club-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .q-card-text{font-size:13px;color:var(--text-light);line-height:1.4;overflow:hidden;text-overflow:ellipsis}
+.q-num{color:var(--text-gray);font-family:ui-monospace,monospace;font-size:12px}
 .q-card-meta{font-size:11px;color:var(--text-gray);margin-top:3px;font-family:ui-monospace,monospace}
-.q-card-count{font-size:18px;font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap;margin-left:12px}
+.q-card-right{display:flex;align-items:center;gap:8px;margin-left:12px}
+.q-card-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.q-card-header:hover .q-card-actions{opacity:1}
+.q-action-btn{background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;font-size:14px;padding:4px 6px;line-height:1;transition:all .15s}
+.q-action-btn:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15)}
+.q-del-btn:hover{background:rgba(255,50,50,.15);border-color:rgba(255,50,50,.3)}
+.q-card-count{font-size:18px;font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap}
 
 /* Card detail panel */
 .q-card-detail{padding:0 16px 16px;display:none}
@@ -185,6 +247,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .answer-cb.checked{background:var(--red);border-color:var(--red)}
 .answer-rank{font-size:11px;font-family:ui-monospace,monospace;color:var(--text-gray);min-width:18px}
 .answer-name{font-size:12px;color:var(--text-light);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.answer-edit-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;opacity:.4;transition:opacity .15s;flex-shrink:0}
+.answer-edit-btn:hover{opacity:1}
 .answer-minibar{width:60px;height:2px;background:var(--border);border-radius:1px;overflow:hidden;flex-shrink:0}
 .answer-minibar-fill{height:100%;border-radius:1px}
 .answer-minibar-fill.bar-trap{background:var(--danger)}

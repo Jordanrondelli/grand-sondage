@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/survey.css?v=4">
+  <link rel="stylesheet" href="/css/survey.css?v=8">
 </head>
 <body>
   <!-- Animated background (managed by JS) -->
@@ -25,16 +25,13 @@
       <h1 class="welcome-title anim-slideup" style="animation-delay:0.1s">La Question</h1>
 
       <div class="anim-slideup" style="animation-delay:0.15s">
-        <div class="intro-box">
-          <p class="intro-text">
-            Ces questions vont me permettre de préparer une <strong style="color:#fff">vidéo YouTube</strong>. Tes réponses sont importantes, réponds sérieusement !
-          </p>
-        </div>
-        <div class="warning-box">
-          <div class="warning-icon">&#9888;&#65039;</div>
-          <p class="warning-text">
-            <strong>IMPORTANT :</strong> Réponds sérieusement, soigne ton orthographe et ne rajoute pas de mots superflus.<br>
-            Les réponses troll, spam ou mal écrites seront <strong>automatiquement supprimées</strong> et remplacées par quelqu'un qui aura joué le jeu.
+        <div class="warning-box-big">
+          <div class="warning-icon-big">&#9888;&#65039;</div>
+          <div class="warning-title-big">ATTENTION</div>
+          <p class="warning-text-big">
+            Chaque r&eacute;ponse compte pour la vid&eacute;o.<br>
+            <strong>R&eacute;ponds s&eacute;rieusement</strong>, soigne ton <strong>orthographe</strong> et <strong>ne rajoute pas de mots superflus</strong>.<br><br>
+            Toute r&eacute;ponse troll, spam ou mal &eacute;crite sera <strong>automatiquement supprim&eacute;e</strong> et remplac&eacute;e par celle de quelqu'un qui aura jou&eacute; le jeu s&eacute;rieusement.
           </p>
         </div>
       </div>
@@ -57,33 +54,57 @@
         </div>
       </div>
 
-      <div class="demo-wrap anim-slideup" style="animation-delay:0.35s">
-        <div class="demo-row">
-          <div class="demo-field">
-            <label class="demo-label" for="age-input">Ton âge</label>
-            <div class="age-input-group">
-              <input type="number" id="age-input" min="1" max="120" placeholder="..." class="age-field" inputmode="numeric">
-              <span class="age-suffix">ans</span>
-            </div>
-          </div>
-          <div class="demo-field">
-            <label class="demo-label">Ton genre</label>
-            <div class="gender-buttons" id="gender-buttons">
-              <button type="button" class="gender-btn" data-gender="homme">Homme</button>
-              <button type="button" class="gender-btn" data-gender="femme">Femme</button>
-              <button type="button" class="gender-btn" data-gender="autre">Autre</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="anim-slideup" style="animation-delay:0.45s">
+      <div class="anim-slideup" style="animation-delay:0.4s">
         <div class="live-counter" id="live-counter" style="display:none">
           <span class="live-dot"></span>
           <span id="participant-text"></span>
         </div>
-        <button class="btn-primary disabled" id="btn-start">C'est parti</button>
+        <button class="btn-primary disabled" id="btn-start">Lis bien les r&egrave;gles...</button>
         <div class="already-text" id="already" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DEMOGRAPHICS ===== -->
+  <div id="screen-demographics" class="screen">
+    <div class="screen-inner" style="max-width:420px">
+      <h1 class="welcome-title anim-slideup" style="animation-delay:0.1s;font-size:1.6rem">Avant de commencer...</h1>
+      <p class="demo-subtitle anim-slideup" style="animation-delay:0.15s">On a besoin de ces infos pour notre étude</p>
+
+      <div class="demo-section anim-slideup" style="animation-delay:0.2s">
+        <label class="demo-label">Tu es...</label>
+        <div class="demo-gender-row">
+          <button class="demo-gender-btn" data-gender="femme">👩 Femme</button>
+          <button class="demo-gender-btn" data-gender="homme">👨 Homme</button>
+        </div>
+      </div>
+
+      <div class="demo-section anim-slideup" style="animation-delay:0.3s">
+        <label class="demo-label">Quel est ton &acirc;ge ?</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" class="demo-age-input" id="demo-age" placeholder="Ex : 24" maxlength="2" autocomplete="off">
+        <p class="demo-age-error" id="demo-age-error"></p>
+      </div>
+
+      <div class="anim-slideup" style="animation-delay:0.4s">
+        <button class="btn-primary disabled" id="btn-demo-start">C'est parti !</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== REMINDER ===== -->
+  <div id="screen-reminder" class="screen">
+    <div class="screen-inner" style="max-width:440px">
+      <div class="reminder-emoji anim-popin">🎯</div>
+      <h1 class="welcome-title anim-slideup" style="animation-delay:0.1s;font-size:1.5rem">Dernier rappel !</h1>
+      <div class="reminder-box anim-slideup" style="animation-delay:0.2s">
+        <p class="reminder-text">
+          Tes r&eacute;ponses vont <strong>directement dans la vid&eacute;o</strong>.<br><br>
+          R&eacute;ponds <strong>s&eacute;rieusement</strong> et <strong>honn&ecirc;tement</strong>, m&ecirc;me si la question te semble dr&ocirc;le ou g&ecirc;nante.<br><br>
+          Pas de blague, pas d'ironie &mdash; donne ta <strong>vraie r&eacute;ponse</strong>.
+        </p>
+      </div>
+      <div class="anim-slideup" style="animation-delay:0.35s">
+        <button class="btn-primary disabled" id="btn-reminder-go">Lis bien...</button>
       </div>
     </div>
   </div>
@@ -114,7 +135,8 @@
 
       <!-- Input phase -->
       <div id="phase-input" class="anim-fadein">
-        <div class="input-group">
+        <p class="input-reminder" id="input-reminder">20 caract&egrave;res maximum, r&eacute;ponds s&eacute;rieusement</p>
+        <div class="input-group" id="input-group">
           <input type="text" class="answer-input" id="answer-input" placeholder="Ta réponse..." maxlength="60" autocomplete="off" autocorrect="off" spellcheck="false">
           <button class="btn-send disabled" id="btn-validate">→</button>
         </div>
@@ -169,21 +191,9 @@
     </div>
   </div>
 
-  <!-- ===== ERROR ===== -->
-  <div id="screen-error" class="screen">
-    <div class="screen-inner" style="max-width:380px">
-      <div class="feedback-emoji anim-popin">😵</div>
-      <p class="feedback-msg anim-slideup" style="animation-delay:0.15s">Oups !</p>
-      <p class="feedback-counter anim-slideup" id="error-text" style="animation-delay:0.25s">Une erreur est survenue. Vérifie ta connexion et réessaie.</p>
-      <div class="anim-slideup" style="animation-delay:0.35s">
-        <button class="btn-primary" id="btn-retry">Réessayer</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Confetti container -->
   <div id="confetti-container"></div>
 
-  <script src="/js/survey.js?v=10"></script>
+  <script src="/js/survey.js?v=15"></script>
 </body>
 </html>

@@ -11,15 +11,13 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'clubsecret2026';
 
 // --- Normalization & Validation ---
 
-// Cache for banned words, corrections, settings (refreshed every 60s)
+// Cache for banned words, settings (refreshed every 60s)
 let bannedWordsCache = [];
-let correctionsCache = [];
 let autoMergeEnabled = true;
 let cacheTime = 0;
 async function refreshCache() {
   if (Date.now() - cacheTime < 60000) return;
   bannedWordsCache = await db.getBannedWords();
-  correctionsCache = await db.getCorrections();
   const am = await db.getSetting('auto_merge');
   autoMergeEnabled = am !== '0';
   cacheTime = Date.now();
@@ -27,17 +25,11 @@ async function refreshCache() {
 function invalidateCache() { cacheTime = 0; }
 
 function normalizeAnswer(text) {
+  // Raw answer — only trim whitespace and remove emojis
   let s = text
-    .toLowerCase()
     .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\ufe0f]/gu, '')
-    .replace(/[^a-zà-ÿ0-9\s''\-]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  // Strip leading articles (repeat to catch chained: "de la mon")
-  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une |mon |ma |mes |ton |ta |tes |son |sa |ses |c'est |je dirais |je dis |j'aime |j'adore )/i, '').trim();
-  s = s.replace(/^(de la |de l'|du |des |les |le |la |l'|un |une )/i, '').trim();
-  // Strip trailing filler
-  s = s.replace(/\s+(lol|mdr|haha|xd|ptdr|bien sur|evidemment|je pense|je crois|perso|personnellement|quoi|en vrai|genre)$/i, '').trim();
   return s;
 }
 
@@ -49,39 +41,20 @@ function containsBannedWord(text) {
   return false;
 }
 
-function applyCorrections(text) {
-  for (const { wrong, correct } of correctionsCache) {
-    if (text === wrong) return correct;
-    const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    text = text.replace(new RegExp(escaped, 'gi'), correct);
-  }
-  return text.trim();
-}
-
 function isGibberish(text) {
   const stripped = text.replace(/[\s'''-]/g, '');
-  // Too short
   if (stripped.length < 2) return true;
-  // Only repeated same character: "aaa", "..."
   if (/^(.)\1+$/.test(stripped)) return true;
-  // No vowel at all — not a real word (but allow numbers like "42")
   if (!/[aeiouyàâäéèêëïîôùûüÿœæ0-9]/i.test(stripped)) return true;
-  // 5+ consonants in a row — keyboard mash
   if (/[bcdfghjklmnpqrstvwxz]{5}/i.test(stripped)) return true;
-  // Same consonant 3+ times in a row: "bbb", "kkk"
   if (/([bcdfghjklmnpqrstvwxz])\1{2}/i.test(stripped)) return true;
-  // Single char dominance >60% (for 6+ chars)
   if (stripped.length >= 6) {
     const freq = {};
     for (const ch of stripped) freq[ch] = (freq[ch] || 0) + 1;
     if (Math.max(...Object.values(freq)) / stripped.length > 0.6) return true;
   }
-  // Repeating short pattern 3+ times: "ababab"
   if (/^(.{1,3})\1{2,}$/i.test(stripped)) return true;
-  // Same vowel 3+ times in a row: "ooooj", "aaaa"
   if (/([aeiouyàâäéèêëïîôùûüÿœæ])\1{2}/i.test(stripped)) return true;
-  // Long string with very few unique chars — keyboard spam
-  if (stripped.length > 10 && new Set(stripped.toLowerCase()).size <= stripped.length / 3) return true;
   return false;
 }
 
@@ -92,7 +65,6 @@ function deepNormalize(text) {
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '');
-  // Common phonetic substitutions for French
   s = s.replace(/ph/g, 'f')
     .replace(/qu/g, 'k')
     .replace(/ck/g, 'k')
@@ -100,7 +72,6 @@ function deepNormalize(text) {
     .replace(/eau/g, 'o')
     .replace(/au/g, 'o')
     .replace(/ou/g, 'u');
-  // Collapse repeated chars
   s = s.replace(/(.)\1+/g, '$1');
   return s;
 }
@@ -130,13 +101,10 @@ function areSimilar(a, b) {
   const maxLen = Math.max(na.length, nb.length);
   if (maxLen === 0) return true;
   const dist = levenshtein(na, nb);
-  // More aggressive: 40% tolerance for clustering
   const threshold = maxLen <= 4 ? 1 : Math.ceil(maxLen * 0.4);
   return dist <= threshold;
 }
 
-// Find matching existing answer — returns existing text or null
-// Uses phonetic normalization + Levenshtein with 35% tolerance
 function findMatchingAnswer(newText, existingAnswers) {
   const newNorm = deepNormalize(newText);
   let bestMatch = null, bestDist = Infinity;
@@ -148,7 +116,6 @@ function findMatchingAnswer(newText, existingAnswers) {
     if (maxLen === 0) continue;
     const dist = levenshtein(newNorm, existNorm);
     const ratio = dist / maxLen;
-    // 35% tolerance — aggressive merge for short answers
     if (ratio <= 0.35 && dist < bestDist) {
       bestDist = dist;
       bestMatch = text;
@@ -157,7 +124,6 @@ function findMatchingAnswer(newText, existingAnswers) {
   return bestMatch;
 }
 
-// Cluster answers for CSV export (more permissive — 70% similarity)
 function clusterAnswers(answers) {
   const clusters = [];
   for (const item of answers) {
@@ -208,90 +174,151 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
 
-// Health check (used by Render + external ping services)
+// Health check
 app.get('/health', (req, res) => res.status(200).send('ok'));
+
+// Debug endpoint — diagnose survey issues
+app.get('/api/debug/survey', async (req, res) => {
+  try {
+    const id = Number(req.query.s);
+    if (!id || isNaN(id)) return res.json({ error: 'Pass ?s=<survey_id>' });
+    const allSurveys = await db.getAllSurveys();
+    const survey = allSurveys.find(s => s.id === id);
+    const questionIds = survey ? await db.getSurveyQuestionIds(id) : [];
+    let testQuestion = null, testError = null;
+    if (survey) {
+      try { testQuestion = await db.getAvailableQuestion(id, [], 'femme', 25); }
+      catch (e) { testError = e.message; }
+    }
+    res.json({
+      surveyId: id,
+      surveyExists: !!survey,
+      surveyActive: survey ? survey.active : null,
+      surveyActiveType: survey ? typeof survey.active : null,
+      activeCheckResult: survey ? !!Number(survey.active) : false,
+      linkedQuestionCount: questionIds.length,
+      allSurveys: allSurveys.map(s => ({ id: s.id, name: s.name, active: s.active, activeType: typeof s.active })),
+      testQuestion,
+      testError
+    });
+  } catch (e) { res.status(500).json({ error: e.message, stack: e.stack }); }
+});
 
 function requireAdmin(req, res, next) {
   if (req.session?.isAdmin) return next();
   res.status(401).json({ error: 'Non autorisé' });
 }
 
+// --- Helper: resolve survey ID from ?s= param or active survey ---
+async function getActiveSurveyId() {
+  const s = await db.getActiveSurvey();
+  return s ? s.id : null;
+}
+
+async function resolveSurveyId(req) {
+  const explicit = req.query.s || req.body?.survey_id;
+  if (!explicit) return null; // No survey ID = reject (no silent fallback)
+  const id = Number(explicit);
+  if (isNaN(id)) return null;
+  const survey = await db.getSurveyById(id);
+  return (survey && !!Number(survey.active)) ? id : null;
+}
+
 // --- Public API ---
 
-// Questions that allow longer answers (maxlength exception)
 const LONG_ANSWER_PATTERNS = ['réplique de film'];
 
 app.get('/api/questions/next', async (req, res) => {
   try {
+    const surveyId = await resolveSurveyId(req);
+    if (!surveyId) {
+      console.warn('No active survey found for params:', { s: req.query.s, survey_id: req.body?.survey_id });
+      return res.json({ done: true });
+    }
     let ex; try { ex = JSON.parse(req.query.exclude || '[]'); if (!Array.isArray(ex)) ex = []; } catch { ex = []; }
-    const age = parseInt(req.query.age, 10) || 0;
-    const q = await db.getAvailableQuestion(ex, age);
-    if (!q) return res.json({ done: true });
+    const gender = req.query.gender || null;
+    const age = req.query.age ? Number(req.query.age) : null;
+    const q = await db.getAvailableQuestion(surveyId, ex, gender, age);
+    if (!q) {
+      console.warn('No available question for survey', surveyId, { gender, age, excludeCount: ex.length });
+      return res.json({ done: true });
+    }
     const isLong = LONG_ANSWER_PATTERNS.some(p => q.text.toLowerCase().includes(p));
-    res.json({ id: q.id, text: q.text, club: q.club, maxLength: isLong ? 80 : 20 });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+    const cleanText = q.text.replace(/^\[V2\]\s*/, '');
+    res.json({ id: q.id, text: cleanText, club: q.club, maxLength: isLong ? 200 : 40 });
+  } catch (e) { console.error('GET /api/questions/next error:', e); res.status(500).json({ error: 'Erreur: ' + e.message }); }
 });
 
 app.post('/api/answers', rateLimit, async (req, res) => {
   try {
-    const { question_id, text, response_time } = req.body;
+    const { question_id, text, response_time, gender, age, respondent_id } = req.body;
     if (!question_id || !text || typeof text !== 'string')
       return res.status(400).json({ error: 'Invalide' });
 
+    const surveyId = await resolveSurveyId(req);
+    if (!surveyId) return res.status(400).json({ error: 'Aucun sondage actif' });
+
     await refreshCache();
 
-    // Determine max length for this question
     const question = await db.getQuestionById(question_id);
     const isLong = question && LONG_ANSWER_PATTERNS.some(p => question.text.toLowerCase().includes(p));
-    const maxLen = isLong ? 80 : 20;
+    const maxLen = isLong ? 200 : 40;
 
     let normalized = normalizeAnswer(text);
     if (!normalized || normalized.length < 2 || normalized.length > maxLen) {
-      await db.incrementRejected(question_id);
+      await db.incrementRejected(surveyId, question_id);
       return res.status(400).json({ error: normalized && normalized.length > maxLen ? 'Réponse trop longue (max ' + maxLen + ' caractères)' : 'Donne une vraie réponse 😉', troll: true });
     }
     const rt = (typeof response_time === 'number' && response_time > 0 && response_time <= 45) ? Math.round(response_time) : null;
     if (isGibberish(normalized) || containsBannedWord(normalized)) {
-      await db.incrementRejected(question_id);
+      await db.incrementRejected(surveyId, question_id);
       return res.status(400).json({ error: 'Donne une vraie réponse 😉', troll: true });
     }
 
-    // Apply auto-corrections
-    normalized = applyCorrections(normalized);
+    // No auto-corrections — keep raw normalized answer
 
-    const count = await db.getAnswerCount(question_id);
-    if (count >= db.THRESHOLD)
-      return res.status(410).json({ error: 'Complet' });
+    // Validate and pass demographics
+    const validGender = (gender === 'homme' || gender === 'femme') ? gender : null;
+    const validAge = (typeof age === 'number' && age >= 10 && age <= 77) ? age : null;
 
-    // Fuzzy match against existing answers (if enabled)
-    if (autoMergeEnabled) {
-      const existing = await db.getExistingAnswers(question_id);
-      const match = findMatchingAnswer(normalized, existing);
-      if (match) normalized = match;
+    // Check gender quota for adults (minors always pass)
+    if (validGender && validAge && validAge >= 18) {
+      const genderCount = await db.getGenderAdultCount(surveyId, question_id, validGender);
+      if (genderCount >= db.GENDER_QUOTA)
+        return res.status(410).json({ error: 'Complet' });
     }
 
-    await db.insertAnswer(question_id, normalized, rt);
+    // Auto-merge disabled — store raw answer as-is
+    // Validate respondent_id format (should be a UUID-like string)
+    const rid = (typeof respondent_id === 'string' && respondent_id.length >= 10 && respondent_id.length <= 50) ? respondent_id : null;
+    await db.insertAnswer(surveyId, question_id, normalized, rt, validGender, validAge, rid);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.post('/api/questions/:id/skip', rateLimit, async (req, res) => {
   try {
-    await db.incrementSkip(req.params.id);
+    const allowSkip = await db.getSetting('allow_skip');
+    if (allowSkip === '0') return res.status(403).json({ error: 'Skip désactivé' });
+    const surveyId = await resolveSurveyId(req);
+    if (!surveyId) return res.status(400).json({ error: 'Aucun sondage actif' });
+    await db.incrementSkip(surveyId, req.params.id);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
-app.get('/api/stats/participants', async (req, res) => {
-  try { res.json({ count: await db.getTotalParticipantCount() }); }
-  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+app.get('/api/settings/allow-skip', async (req, res) => {
+  try {
+    const val = await db.getSetting('allow_skip');
+    res.json({ enabled: val !== '0' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
-app.get('/api/stats/survey-status', async (req, res) => {
+app.get('/api/stats/participants', async (req, res) => {
   try {
-    const stats = await db.getStats();
-    res.json({ ...stats, available: stats.totalQuestions - stats.completeQuestions });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+    const surveyId = await resolveSurveyId(req);
+    res.json({ count: surveyId ? await db.getTotalParticipantCount(surveyId) : 0 });
+  } catch (e) { console.error('GET /api/stats/participants error:', e); res.status(500).json({ error: 'Erreur: ' + e.message }); }
 });
 
 // --- SSE for shooting mode ---
@@ -313,10 +340,121 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/check', (req, res) => { res.json({ authenticated: !!req.session?.isAdmin }); });
 app.post('/api/admin/logout', (req, res) => { req.session.destroy(); res.json({ ok: true }); });
 
-// --- Admin API ---
+// --- Admin: Survey management ---
+
+app.get('/api/admin/surveys', requireAdmin, async (req, res) => {
+  try { res.json(await db.getAllSurveys()); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/surveys', requireAdmin, async (req, res) => {
+  try {
+    const { name, duplicate_from } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nom requis' });
+    const r = await db.createSurvey(name.trim());
+    const newId = r.lastInsertRowid;
+    if (duplicate_from) {
+      await db.duplicateQuestionsToSurvey(duplicate_from, newId);
+    }
+    res.json({ id: newId, name: name.trim() });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nom requis' });
+    await db.renameSurvey(req.params.id, name.trim());
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/surveys/:id/activate', requireAdmin, async (req, res) => {
+  try {
+    await db.activateSurvey(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/admin/surveys/:id/deactivate', requireAdmin, async (req, res) => {
+  try {
+    await db.deactivateSurvey(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/admin/surveys/:id', requireAdmin, async (req, res) => {
+  try {
+    const surveys = await db.getAllSurveys();
+    if (surveys.length <= 1) return res.status(400).json({ error: 'Impossible de supprimer le dernier sondage' });
+    await db.deleteSurvey(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// Update survey slug
+app.put('/api/admin/surveys/:id/slug', requireAdmin, async (req, res) => {
+  try {
+    const slug = (req.body.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (slug && slug.length < 2) return res.status(400).json({ error: 'Slug trop court (min 2 caractères)' });
+    // Check uniqueness
+    if (slug) {
+      const existing = await db.getSurveyBySlug(slug);
+      if (existing && existing.id !== Number(req.params.id)) return res.status(400).json({ error: 'Ce slug est déjà utilisé' });
+    }
+    await db.updateSurveySlug(req.params.id, slug || null);
+    res.json({ ok: true, slug: slug || null });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// Reset demographics for respondents (bumps demo_version)
+app.post('/api/admin/surveys/:id/reset-demo', requireAdmin, async (req, res) => {
+  try {
+    await db.bumpDemoVersion(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// Public: get survey info (demo_version) for a survey
+app.get('/api/survey-info', async (req, res) => {
+  try {
+    const slug = req.query.slug;
+    const id = req.query.s;
+    let survey = null;
+    if (slug) survey = await db.getSurveyBySlug(slug);
+    else if (id) {
+      const all = await db.getAllSurveys();
+      survey = all.find(s => s.id === Number(id));
+    }
+    if (!survey) return res.json({ error: 'not_found' });
+    res.json({ id: survey.id, demo_version: survey.demo_version || 1 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Add/remove questions from a survey
+app.post('/api/admin/surveys/:id/questions', requireAdmin, async (req, res) => {
+  try {
+    const { question_id } = req.body;
+    await db.addQuestionToSurvey(req.params.id, question_id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/admin/surveys/:surveyId/questions/:questionId', requireAdmin, async (req, res) => {
+  try {
+    await db.removeQuestionFromSurvey(req.params.surveyId, req.params.questionId);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// --- Admin API (survey-scoped) ---
 
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
-  try { res.json(await db.getStats()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.json({ totalAnswers: 0, completeQuestions: 0, totalQuestions: 0, genderQuota: db.GENDER_QUOTA });
+    res.json(await db.getStats(Number(surveyId)));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/api/admin/categories', requireAdmin, async (req, res) => {
@@ -341,14 +479,22 @@ app.put('/api/admin/categories/:id', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/questions', requireAdmin, async (req, res) => {
-  try { res.json(await db.getQuestionsWithCounts()); } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.json([]);
+    res.json(await db.getQuestionsWithCounts(Number(surveyId)));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.post('/api/admin/questions', requireAdmin, async (req, res) => {
   try {
-    const { category_id, text } = req.body;
+    const { category_id, text, survey_id } = req.body;
     if (!category_id || !text?.trim()) return res.status(400).json({ error: 'Requis' });
     const r = await db.insertQuestion(category_id, text.trim());
+    // Auto-add to the specified survey
+    if (survey_id) {
+      await db.addQuestionToSurvey(survey_id, r.lastInsertRowid);
+    }
     res.json({ id: r.lastInsertRowid });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -369,9 +515,17 @@ app.delete('/api/admin/questions/:id', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
   try {
+    const surveyId = req.query.survey_id;
+    const filter = req.query.filter; // 'representative' or undefined
+    if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const rawAnswers = await db.getAnswersGrouped(req.params.id);
+    let rawAnswers;
+    if (filter === 'representative') {
+      rawAnswers = await db.getAnswersGroupedRepresentative(Number(surveyId), req.params.id, db.GENDER_QUOTA);
+    } else {
+      rawAnswers = await db.getAnswersGrouped(Number(surveyId), req.params.id);
+    }
 
     // Fuzzy-cluster similar answers for display
     const clustered = [];
@@ -431,10 +585,10 @@ app.get('/api/admin/questions/:id/answers', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/merge', requireAdmin, async (req, res) => {
   try {
-    const { question_id, answer_texts, canonical_text } = req.body;
-    if (!question_id || !answer_texts?.length || !canonical_text)
+    const { question_id, answer_texts, canonical_text, survey_id } = req.body;
+    if (!question_id || !answer_texts?.length || !canonical_text || !survey_id)
       return res.status(400).json({ error: 'Invalide' });
-    await db.mergeAnswers(question_id, answer_texts, canonical_text.trim());
+    await db.mergeAnswers(Number(survey_id), question_id, answer_texts, canonical_text.trim());
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
@@ -514,10 +668,29 @@ app.put('/api/admin/settings/video-mode', requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.get('/api/admin/settings/allow-skip', requireAdmin, async (req, res) => {
+  try {
+    const val = await db.getSetting('allow_skip');
+    res.json({ enabled: val !== '0' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.put('/api/admin/settings/allow-skip', requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    await db.setSetting('allow_skip', enabled ? '1' : '0');
+    res.json({ ok: true, enabled: !!enabled });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
   try {
-    const rows = await db.getAllAnswersForExport();
-    // Group by question
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
+    const filter = req.query.filter;
+    const rows = filter === 'representative'
+      ? await db.getAllAnswersForExportRepresentative(Number(surveyId))
+      : await db.getAllAnswersForExport(Number(surveyId));
     const byQuestion = {};
     rows.forEach(r => {
       if (!byQuestion[r.question_id]) {
@@ -550,11 +723,15 @@ app.get('/api/admin/export', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/questions/:id/export', requireAdmin, async (req, res) => {
   try {
+    const surveyId = req.query.survey_id;
+    if (!surveyId) return res.status(400).json({ error: 'survey_id requis' });
     const question = await db.getQuestionById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const rawAnswers = await db.getAnswersGrouped(req.params.id);
+    const filter = req.query.filter;
+    const rawAnswers = filter === 'representative'
+      ? await db.getAnswersGroupedRepresentative(Number(surveyId), req.params.id, db.GENDER_QUOTA)
+      : await db.getAnswersGrouped(Number(surveyId), req.params.id);
 
-    // Cluster similar answers
     const clustered = [];
     for (const item of rawAnswers) {
       let merged = false;
@@ -592,8 +769,12 @@ app.get('/api/admin/questions/:id/export', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/reset', requireAdmin, async (req, res) => {
-  try { await db.deleteAllAnswers(); res.json({ ok: true }); }
-  catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+  try {
+    const { survey_id } = req.body;
+    if (!survey_id) return res.status(400).json({ error: 'survey_id requis' });
+    await db.deleteAllAnswersForSurvey(Number(survey_id));
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
 app.get('/admin', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
@@ -608,13 +789,14 @@ app.get('/api/tournage/events', requireAdmin, (req, res) => {
     'X-Accel-Buffering': 'no',
     'Content-Encoding': 'none',
   });
-  res.write(':\n\n'); // SSE comment keepalive
+  res.write(':\n\n');
   res.flush && res.flush();
   sseClients.add(res);
-  // Keepalive every 15s to prevent proxy timeout
   const keepalive = setInterval(() => { res.write(':\n\n'); res.flush && res.flush(); }, 15000);
   req.on('close', () => { clearInterval(keepalive); sseClients.delete(res); });
 });
+
+// --- Tournage API ---
 
 app.get('/api/tournage/categories', requireAdmin, async (req, res) => {
   try { res.json(await db.getAllCategories()); }
@@ -622,19 +804,119 @@ app.get('/api/tournage/categories', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/tournage/categories/:id/questions', requireAdmin, async (req, res) => {
-  try { res.json(await db.getQuestionsByCategory(req.params.id)); }
+  try { res.json(await db.getTournageQuestions(req.params.id)); }
   catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
-app.get('/api/tournage/questions/:id/answers', requireAdmin, async (req, res) => {
+app.get('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
   try {
-    const question = await db.getQuestionById(req.params.id);
-    if (!question) return res.status(404).json({ error: 'Introuvable' });
-    const answers = await db.getAnswersWithScores(req.params.id);
-    res.json({ question, answers });
+    const q = await db.getTournageQuestion(req.params.id);
+    if (!q) return res.status(404).json({ error: 'Introuvable' });
+    const answers = await db.getTournageAnswers(q.id);
+    res.json({ question: q, answers });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
 });
 
+app.put('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Nom requis' });
+    await db.renameTournageQuestion(req.params.id, text.trim());
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.delete('/api/tournage/questions/:id', requireAdmin, async (req, res) => {
+  try {
+    await db.deleteTournageQuestion(req.params.id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+app.post('/api/tournage/reorder', requireAdmin, async (req, res) => {
+  try {
+    const { ordered_ids } = req.body;
+    if (!Array.isArray(ordered_ids)) return res.status(400).json({ error: 'ordered_ids requis' });
+    await db.reorderTournageQuestions(ordered_ids);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur' }); }
+});
+
+// CSV import for a tournage question
+app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit: '5mb' }), async (req, res) => {
+  try {
+    const { csv, category_id, rescale, replace_tq_id, custom_name } = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    if (!csv || !category_id) return res.status(400).json({ error: 'CSV et category_id requis' });
+
+    const lines = csv.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) return res.status(400).json({ error: 'CSV vide ou invalide' });
+
+    const header = lines[0].toLowerCase();
+    const startIdx = (header.includes('question') || header.includes('réponse') || header.includes('reponse') || header.includes('count') || header.includes('club')) ? 1 : 0;
+
+    let questionText = null;
+    const answerRows = [];
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const cols = [];
+      let current = '', inQuotes = false;
+      for (let j = 0; j < lines[i].length; j++) {
+        const ch = lines[i][j];
+        if (ch === '"') { inQuotes = !inQuotes; }
+        else if ((ch === ',' || ch === ';') && !inQuotes) { cols.push(current.trim()); current = ''; }
+        else { current += ch; }
+      }
+      cols.push(current.trim());
+
+      if (cols.length < 4) continue;
+
+      let qText, ansText, countVal, pctVal;
+      if (cols.length >= 6) {
+        qText = cols[2]; ansText = cols[3]; countVal = cols[4]; pctVal = cols[5];
+      } else if (cols.length >= 4) {
+        qText = cols[0]; ansText = cols[1]; countVal = cols[2]; pctVal = cols[3];
+      } else continue;
+
+      if (!questionText && qText) questionText = qText.replace(/^["']|["']$/g, '');
+      const text = ansText.replace(/^["']|["']$/g, '').trim();
+      const count = parseInt(countVal) || 0;
+      const pct = parseFloat(pctVal.replace('%', '').replace(',', '.')) || 0;
+      if (text && count > 0) answerRows.push({ text, count, pct });
+    }
+
+    if (custom_name) questionText = custom_name;
+    if (!questionText || answerRows.length === 0) return res.status(400).json({ error: 'Aucune donnée valide trouvée dans le CSV' });
+
+    if (rescale) {
+      const totalCount = answerRows.reduce((s, a) => s + a.count, 0);
+      if (totalCount > 0) {
+        answerRows.forEach(a => {
+          a.pct = (a.count / totalCount) * 100;
+          a.count = Math.round((a.count / totalCount) * 100);
+        });
+      }
+    }
+
+    answerRows.sort((a, b) => b.count - a.count);
+
+    let tqId;
+    if (replace_tq_id) {
+      tqId = replace_tq_id;
+      await db.clearTournageAnswers(tqId);
+    } else {
+      const result = await db.insertTournageQuestion(category_id, questionText);
+      tqId = result.lastInsertRowid;
+    }
+
+    for (const a of answerRows) {
+      await db.insertTournageAnswer(tqId, a.text, a.count, a.pct);
+    }
+
+    res.json({ ok: true, tq_id: tqId, question: questionText, answer_count: answerRows.length });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur import: ' + e.message }); }
+});
+
+// SSE events for display
 app.post('/api/tournage/show-answer', requireAdmin, (req, res) => {
   const { answer, score } = req.body;
   sendSSE({ type: 'show-answer', answer, score });
@@ -664,6 +946,15 @@ app.post('/api/tournage/set-club', requireAdmin, (req, res) => {
 
 app.get('/tournage', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'tournage.html')); });
 app.get('/tournage/display', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'tournage-display.html')); });
+
+// Slug route: /:slug serves the survey — must be LAST to not shadow other routes
+app.get('/:slug', async (req, res, next) => {
+  // Skip if it looks like a file request or known route
+  if (req.params.slug.includes('.') || ['admin', 'tournage', 'health'].includes(req.params.slug)) return next();
+  const survey = await db.getSurveyBySlug(req.params.slug);
+  if (!survey) return next();
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 db.init().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
