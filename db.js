@@ -92,6 +92,7 @@ async function init() {
     await pool.query("ALTER TABLE surveys ADD COLUMN IF NOT EXISTS demo_version INTEGER DEFAULT 1").catch(() => {});
     await pool.query("ALTER TABLE answers ADD COLUMN IF NOT EXISTS respondent_id TEXT").catch(() => {});
     await pool.query("CREATE INDEX IF NOT EXISTS idx_answers_respondent ON answers(respondent_id)").catch(() => {});
+    await pool.query("ALTER TABLE questions ADD COLUMN IF NOT EXISTS adults_only INTEGER DEFAULT 0").catch(() => {});
     // Per-survey stats for skip/rejected per question
     await pool.query(`
       CREATE TABLE IF NOT EXISTS survey_question_stats (survey_id INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, skip_count INTEGER DEFAULT 0, rejected_count INTEGER DEFAULT 0, PRIMARY KEY (survey_id, question_id));
@@ -130,6 +131,7 @@ async function init() {
     try { sqlite.exec("ALTER TABLE surveys ADD COLUMN demo_version INTEGER DEFAULT 1"); } catch {}
     try { sqlite.exec("ALTER TABLE answers ADD COLUMN respondent_id TEXT"); } catch {}
     try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_answers_respondent ON answers(respondent_id)"); } catch {}
+    try { sqlite.exec("ALTER TABLE questions ADD COLUMN adults_only INTEGER DEFAULT 0"); } catch {}
   }
 
   // One-time migration: replace old clubs with new ones
@@ -299,6 +301,83 @@ async function init() {
   const as = await getSetting('allow_skip');
   if (as === null) await setSetting('allow_skip', '1');
 
+  // --- Seed: "Bloqué à la porte" survey ---
+  const blapExists = await get("SELECT id FROM surveys WHERE name = $1", ['Bloqué à la porte']);
+  if (!blapExists) {
+    const blapResult = await run("INSERT INTO surveys (name, active) VALUES ($1, $2)", ['Bloqué à la porte', 0]);
+    const blapId = blapResult.lastInsertRowid;
+
+    // Refresh category map
+    const blapCats = await all("SELECT * FROM categories");
+    const blapCatMap = {};
+    blapCats.forEach(c => { blapCatMap[c.name] = c.id; });
+
+    const blapQuestions = [
+      // --- Glouton Club ---
+      { cat: 'Le Glouton Club', text: 'Quel animal serais-tu curieux de goûter ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Le pays avec la nourriture la plus dégueulasse ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Le plat que tu peux manger tous les jours jusqu\'à la fin de ta vie', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Quelque chose que tu ne mangerais jamais pendant un date ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Si Squeezie était un plat, il serait lequel ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Quelle est la pire sauce ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Quel est le fruit le plus moche ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Le truc le plus gênant que tu puisses faire au resto', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Ton last meal ? (Dernier repas avant de mourir)', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'C\'est quoi l\'ingrédient le plus tue-l\'amour ?', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Quel est l\'aliment qui peut se transformer en sex-toy ?', adults_only: 1 },
+      { cat: 'Le Glouton Club', text: 'Pire cuisine du monde ? (pays)', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'Si tu devais manger une partie d\'un corps humain, ça serait laquelle ? (cuit)', adults_only: 0 },
+      { cat: 'Le Glouton Club', text: 'L\'objet qui serait le meilleur s\'il était comestible ?', adults_only: 0 },
+      // --- Metronomus ---
+      { cat: 'Metronomus', text: 'L\'artiste musical que vous mettez en fond pour baiser ?', adults_only: 1 },
+      { cat: 'Metronomus', text: 'Quel artiste musical serait un bon youtuber / youtubeuse ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Quel artiste musical décédé tu rêverais d\'entendre chanter à ton mariage ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Cite une danse ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Quelle est la chanson française qui résumerait le mieux Joyca ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Cite un instrument de musique insupportable', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Cite un artiste musical cancel', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Quel youtubeur a fait la pire musique ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Quel est le meilleur endroit pour écouter de la musique ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'Meilleur objet qui peut servir de micro ?', adults_only: 0 },
+      { cat: 'Metronomus', text: 'C\'est un/une 10, mais il/elle devient un 4 parce qu\'il écoute du…. ? (cite un genre musical)', adults_only: 0 },
+      // --- Red carpet ---
+      { cat: 'Red carpet', text: 'Quel personnage de dessin animé fait le plus gros caca ?', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Un Disney/Pixar qui t\'a fait pleurer', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Le personnage chauve le plus stylé ? (tous films/dessin animés confondus)', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Un méchant de film avec qui tu rêverais d\'être pote ?', adults_only: 0 },
+      { cat: 'Red carpet', text: 'À partir de combien de temps un film est trop long ? (donnez des chiffres ronds : 1h30 / 1h40 / 1h45 / 2h….)', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Une émotion difficile à jouer pour un acteur', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Un objet de film que tu aimerais avoir dans la vraie vie ?', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Quel youtubeur/youtubeuse serait le meilleur acteur/actrice ?', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Quel dessin animé est le plus traumatisant ?', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Tu gagnes un césar, qui tu remercies en premier ?', adults_only: 0 },
+      { cat: 'Red carpet', text: 'Quel est l\'animal culte le plus connu du cinéma ?', adults_only: 0 },
+      // --- La situation ---
+      { cat: 'La situation', text: 'Le pire endroit pour croiser ton ex', adults_only: 0 },
+      { cat: 'La situation', text: 'Cite une drogue/une addiction (légale ou illégale)', adults_only: 0 },
+      { cat: 'La situation', text: 'Une insulte ringarde que tu peux balancer à quelqu\'un', adults_only: 0 },
+    ];
+
+    for (const q of blapQuestions) {
+      const catId = blapCatMap[q.cat];
+      if (!catId) continue;
+      // Check if this exact question already exists
+      let existing = await get("SELECT id FROM questions WHERE text = $1 AND category_id = $2", [q.text, catId]);
+      let qId;
+      if (existing) {
+        qId = existing.id;
+        // Update adults_only flag if needed
+        if (q.adults_only) await runNoReturn("UPDATE questions SET adults_only = $1 WHERE id = $2", [1, qId]);
+      } else {
+        const r = await run("INSERT INTO questions (category_id, text, adults_only) VALUES ($1, $2, $3)", [catId, q.text, q.adults_only]);
+        qId = r.lastInsertRowid;
+      }
+      // Link to survey
+      await addQuestionToSurvey(blapId, qId);
+    }
+    console.log('Seeded "Bloqué à la porte" survey with', blapQuestions.length, 'questions');
+  }
+
   // --- Multi-survey migration ---
   // Create default "Sondage 1" if no surveys exist, and migrate existing data
   const surveyCount = await get("SELECT COUNT(*) as c FROM surveys");
@@ -407,16 +486,19 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
   // Ensure excludeIds is a valid non-empty array for PostgreSQL ANY()
   const safeExclude = excludeIds && excludeIds.length > 0 ? excludeIds.map(Number).filter(n => !isNaN(n)) : [0];
 
+  // adults_only filter: minors (age < 18 or unknown age) cannot see adults_only questions
+  const adultsOnlyFilter = isAdult ? '' : 'AND COALESCE(q.adults_only, 0) = 0';
+
   // For adults: only show questions where their gender quota isn't full
   // For minors: show questions where at least one gender quota isn't full (question not fully complete)
   if (isPostgres) {
     if (isAdult && gender) {
-      // Adult: check only their gender's quota — uses $2 for gender
       return all(
         `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
          JOIN categories c ON c.id = q.category_id
          JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = $1
          WHERE q.active = 1
+           ${adultsOnlyFilter}
            AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = $2 AND a.age >= 18) < $3
            AND NOT (q.id = ANY($4::int[]))
            AND (q.variant_group IS NULL OR q.variant_group NOT IN (
@@ -426,12 +508,12 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
         [surveyId, gender, GENDER_QUOTA, safeExclude]
       ).then(rows => rows[0] || null);
     } else {
-      // Minor or unknown: show if question not fully complete — only 3 params ($1=survey, $2=quota, $3=exclude)
       return all(
         `SELECT q.id, q.text, c.name as club, q.variant_group FROM questions q
          JOIN categories c ON c.id = q.category_id
          JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = $1
          WHERE q.active = 1
+           ${adultsOnlyFilter}
            AND (
              (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'homme' AND a.age >= 18) < $2
              OR (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = $1 AND a.gender = 'femme' AND a.age >= 18) < $2
@@ -451,6 +533,7 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
          JOIN categories c ON c.id = q.category_id
          JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = ?
          WHERE q.active = 1
+           ${adultsOnlyFilter}
            AND (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ? AND a.gender = ? AND a.age >= 18) < ?
            AND q.id NOT IN (SELECT value FROM json_each(?))
            AND (q.variant_group IS NULL OR q.variant_group NOT IN (
@@ -464,6 +547,7 @@ async function getAvailableQuestion(surveyId, excludeIds, gender, age) {
          JOIN categories c ON c.id = q.category_id
          JOIN survey_questions sq ON sq.question_id = q.id AND sq.survey_id = ?
          WHERE q.active = 1
+           ${adultsOnlyFilter}
            AND (
              (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ? AND a.gender = 'homme' AND a.age >= 18) < ?
              OR (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id AND a.survey_id = ? AND a.gender = 'femme' AND a.age >= 18) < ?
@@ -619,11 +703,11 @@ async function getStats(surveyId) {
   return { totalAnswers, completeQuestions, totalQuestions, genderQuota: GENDER_QUOTA, genderCounts, minorCount, adultCount, adultMale, adultFemale, noDemoCount, ageDistribution, avgAge };
 }
 
-async function insertQuestion(catId, text, variantGroup) {
+async function insertQuestion(catId, text, variantGroup, adultsOnly) {
   if (variantGroup) {
-    return run("INSERT INTO questions (category_id, text, variant_group) VALUES ($1, $2, $3)", [catId, text, variantGroup]);
+    return run("INSERT INTO questions (category_id, text, variant_group, adults_only) VALUES ($1, $2, $3, $4)", [catId, text, variantGroup, adultsOnly ? 1 : 0]);
   }
-  return run("INSERT INTO questions (category_id, text) VALUES ($1, $2)", [catId, text]);
+  return run("INSERT INTO questions (category_id, text, adults_only) VALUES ($1, $2, $3)", [catId, text, adultsOnly ? 1 : 0]);
 }
 
 async function updateQuestion(id, text, catId) {
