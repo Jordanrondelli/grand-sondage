@@ -122,6 +122,16 @@
     typeNext();
   }
 
+  // --- Rank-based color helper ---
+  function getRankStyle(rank, total) {
+    if (!rank || !total) return null;
+    const ratio = rank / total;
+    if (ratio <= 0.1) return { label: 'TOP !', color: '#FFD700', glow: 'rgba(255,215,0,.4)', tint: 'rgba(255,215,0,.06)', tier: 'gold' };
+    if (ratio <= 0.3) return { label: 'Bien joué !', color: '#4ADE80', glow: 'rgba(74,222,128,.4)', tint: 'rgba(74,222,128,.06)', tier: 'green' };
+    if (ratio <= 0.6) return { label: 'Correct', color: '#FBBF24', glow: 'rgba(251,191,36,.4)', tint: 'rgba(251,191,36,.06)', tier: 'yellow' };
+    return { label: 'Rare...', color: '#F87171', glow: 'rgba(248,113,113,.4)', tint: 'rgba(248,113,113,.06)', tier: 'red' };
+  }
+
   // --- ROLLING COUNTER SCORE ---
   function revealScore() {
     if (currentScore == null) return;
@@ -132,14 +142,13 @@
     const tint = $('display-tint');
     const target = currentScore;
 
-    // Color
+    // Color based on rank position (not raw score)
+    const style = getRankStyle(currentRank, currentTotal);
     let color, glowColor, tintColor;
-    if (target <= 5) {
-      color = '#4ADE80'; glowColor = 'rgba(74,222,128,.4)'; tintColor = 'rgba(74,222,128,.06)';
-    } else if (target <= 15) {
-      color = '#FBBF24'; glowColor = 'rgba(251,191,36,.4)'; tintColor = 'rgba(251,191,36,.06)';
+    if (style) {
+      color = style.color; glowColor = style.glow; tintColor = style.tint;
     } else {
-      color = '#F87171'; glowColor = 'rgba(248,113,113,.4)'; tintColor = 'rgba(248,113,113,.06)';
+      color = '#fff'; glowColor = 'rgba(255,255,255,.3)'; tintColor = 'rgba(255,255,255,.04)';
     }
 
     numEl.style.color = color;
@@ -151,14 +160,13 @@
 
     // Rolling counter
     let current = 0;
-    const duration = 1200; // ms
-    const steps = Math.min(target, 40); // max 40 steps
+    const duration = 1200;
+    const steps = Math.min(target, 40);
     const stepTime = duration / Math.max(steps, 1);
 
     counterTimer = setInterval(() => {
       current++;
       const progress = current / steps;
-      // Ease out: fast start, slow end
       const eased = Math.round(target * (1 - Math.pow(1 - progress, 3)));
       numEl.textContent = Math.min(eased, target);
 
@@ -176,11 +184,24 @@
         tint.classList.add('visible');
 
         // Show rank after score reveal
-        if (currentRank != null && currentTotal != null) {
+        if (currentRank != null && currentTotal != null && style) {
           setTimeout(() => {
-            $('display-rank-num').textContent = currentRank + '/' + currentTotal;
-            $('display-rank-wrap').classList.add('visible');
-          }, 400);
+            const rankWrap = $('display-rank-wrap');
+            const labelEl = $('display-rank-label');
+            const numRankEl = $('display-rank-num');
+            const posEl = $('display-rank-pos');
+
+            labelEl.textContent = style.label;
+            labelEl.style.color = style.color;
+            numRankEl.textContent = currentRank;
+            numRankEl.style.color = style.color;
+            posEl.textContent = '/' + currentTotal;
+
+            rankWrap.dataset.tier = style.tier;
+            rankWrap.style.setProperty('--rank-color', style.color);
+            rankWrap.style.setProperty('--rank-glow', style.glow);
+            rankWrap.classList.add('visible');
+          }, 500);
         }
       }
     }, stepTime);
@@ -245,8 +266,12 @@
     $('display-flash').classList.remove('fire');
     $('display-container').classList.remove('shake');
 
-    $('display-rank-wrap').classList.remove('visible');
+    const rankWrap = $('display-rank-wrap');
+    rankWrap.classList.remove('visible');
+    delete rankWrap.dataset.tier;
+    $('display-rank-label').textContent = '';
     $('display-rank-num').textContent = '';
+    $('display-rank-pos').textContent = '';
 
     currentAnswer = '';
     currentScore = 0;
