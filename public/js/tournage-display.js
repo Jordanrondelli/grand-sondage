@@ -126,10 +126,10 @@
   function getRankStyle(rank, total) {
     if (!rank || !total) return null;
     const ratio = rank / total;
-    if (ratio <= 0.1) return { label: 'TOP !', color: '#FFD700', glow: 'rgba(255,215,0,.4)', tint: 'rgba(255,215,0,.06)', tier: 'gold' };
-    if (ratio <= 0.3) return { label: 'Bien joué !', color: '#4ADE80', glow: 'rgba(74,222,128,.4)', tint: 'rgba(74,222,128,.06)', tier: 'green' };
-    if (ratio <= 0.6) return { label: 'Correct', color: '#FBBF24', glow: 'rgba(251,191,36,.4)', tint: 'rgba(251,191,36,.06)', tier: 'yellow' };
-    return { label: 'Rare...', color: '#F87171', glow: 'rgba(248,113,113,.4)', tint: 'rgba(248,113,113,.06)', tier: 'red' };
+    if (ratio <= 0.1) return { label: 'TOP', color: '#FFD700', glow: 'rgba(255,215,0,.4)', tint: 'rgba(255,215,0,.06)', tier: 'gold' };
+    if (ratio <= 0.3) return { label: 'BIEN !', color: '#4ADE80', glow: 'rgba(74,222,128,.4)', tint: 'rgba(74,222,128,.06)', tier: 'green' };
+    if (ratio <= 0.6) return { label: 'OK.', color: '#FBBF24', glow: 'rgba(251,191,36,.4)', tint: 'rgba(251,191,36,.06)', tier: 'yellow' };
+    return { label: 'GUEZ', color: '#F87171', glow: 'rgba(248,113,113,.4)', tint: 'rgba(248,113,113,.06)', tier: 'red' };
   }
 
   // --- ROLLING COUNTER SCORE ---
