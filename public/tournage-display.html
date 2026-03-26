@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tournage — Plateau</title>
-  <link rel="stylesheet" href="/css/tournage.css?v=6">
+  <link rel="stylesheet" href="/css/tournage.css?v=7">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff}
@@ -50,8 +50,11 @@
 
       <!-- Rank (appears after score reveal) -->
       <div class="display-rank-wrap" id="display-rank-wrap">
-        <span class="display-rank-label">Réponse</span>
-        <span class="display-rank-num" id="display-rank-num"></span>
+        <div class="display-rank-label" id="display-rank-label"></div>
+        <div class="display-rank-badge">
+          <span class="display-rank-num" id="display-rank-num"></span>
+          <span class="display-rank-pos" id="display-rank-pos"></span>
+        </div>
       </div>
     </div>
 
@@ -75,6 +78,6 @@
     </div>
   </div>
 
-  <script src="/js/tournage-display.js?v=7"></script>
+  <script src="/js/tournage-display.js?v=8"></script>
 </body>
 </html>

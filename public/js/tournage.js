@@ -156,14 +156,17 @@
     grid.innerHTML = '';
     $('answers-count').textContent = currentAnswers.length + ' réponses';
     const maxPct = Math.max(...currentAnswers.map(a => a.percentage || 0), 1);
+    const total = currentAnswers.length;
     currentAnswers.forEach((a, i) => {
-      const scoreColor = a.percentage <= 5 ? '#4ADE80' : a.percentage <= 15 ? '#FBBF24' : '#F87171';
+      const rank = i + 1;
+      const ratio = rank / total;
+      const scoreColor = ratio <= 0.1 ? '#FFD700' : ratio <= 0.3 ? '#4ADE80' : ratio <= 0.6 ? '#FBBF24' : '#F87171';
       const barW = Math.max(2, ((a.percentage || 0) / maxPct) * 100);
       const btn = document.createElement('button');
       btn.className = 'answer-btn';
       btn.innerHTML =
         '<div class="answer-bar" style="width:' + barW + '%;background:' + scoreColor + '"></div>' +
-        '<span class="answer-btn-rank">#' + (i + 1) + '</span>' +
+        '<span class="answer-btn-rank" style="color:' + scoreColor + '">#' + rank + '</span>' +
         '<span class="answer-btn-text">' + esc(a.text) + '</span>' +
         '<span class="answer-btn-pct">' + (a.percentage != null ? a.percentage + '%' : '') + '</span>' +
         '<span class="answer-btn-score" style="color:' + scoreColor + '">' + a.count + '</span>';
