@@ -918,8 +918,8 @@ app.post('/api/tournage/import', requireAdmin, express.text({ type: '*/*', limit
 
 // SSE events for display
 app.post('/api/tournage/show-answer', requireAdmin, (req, res) => {
-  const { answer, score } = req.body;
-  sendSSE({ type: 'show-answer', answer, score });
+  const { answer, score, rank, total } = req.body;
+  sendSSE({ type: 'show-answer', answer, score, rank: rank || null, total: total || null });
   res.json({ ok: true });
 });
 
