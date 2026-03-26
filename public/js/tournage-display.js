@@ -3,6 +3,8 @@
   let eventSource = null;
   let currentScore = 0;
   let currentAnswer = '';
+  let currentRank = null;
+  let currentTotal = null;
   let typewriterTimer = null;
   let counterTimer = null;
 
@@ -56,6 +58,8 @@
         resetDisplay();
         currentAnswer = data.answer || '';
         currentScore = data.score;
+        currentRank = data.rank || null;
+        currentTotal = data.total || null;
         showAnswer(currentAnswer);
         break;
       case 'reveal-score':
@@ -170,6 +174,14 @@
         // Tint the background
         tint.style.background = 'radial-gradient(ellipse at center, ' + tintColor + ' 0%, transparent 70%)';
         tint.classList.add('visible');
+
+        // Show rank after score reveal
+        if (currentRank != null && currentTotal != null) {
+          setTimeout(() => {
+            $('display-rank-num').textContent = currentRank + '/' + currentTotal;
+            $('display-rank-wrap').classList.add('visible');
+          }, 400);
+        }
       }
     }, stepTime);
   }
@@ -233,8 +245,13 @@
     $('display-flash').classList.remove('fire');
     $('display-container').classList.remove('shake');
 
+    $('display-rank-wrap').classList.remove('visible');
+    $('display-rank-num').textContent = '';
+
     currentAnswer = '';
     currentScore = 0;
+    currentRank = null;
+    currentTotal = null;
   }
 
   checkAuth();

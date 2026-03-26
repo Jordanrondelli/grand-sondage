@@ -174,13 +174,15 @@
 
   // --- Trigger answer from panel click ---
   function triggerPanelAnswer(a, btnEl) {
-    selectedAnswer = { text: a.text, score: a.count };
+    const rank = currentAnswers.indexOf(a) + 1;
+    const total = currentAnswers.length;
+    selectedAnswer = { text: a.text, score: a.count, rank, total };
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
     btnEl.classList.add('selected');
     $('custom-answer-input').value = a.text;
-    api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: a.text, score: a.count }) });
+    api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: a.text, score: a.count, rank, total }) });
     $('action-buttons').style.display = '';
-    setStatus('📺 ' + a.text.toUpperCase(), true);
+    setStatus('📺 ' + a.text.toUpperCase() + ' (' + rank + '/' + total + ')', true);
   }
 
   // --- Custom answer input ---
@@ -200,16 +202,25 @@
     const text = $('custom-answer-input').value.trim();
     if (!text) return;
     const match = findMatchInPanel(text);
-    selectedAnswer = match ? { text: text, score: match.count } : { text, score: null };
+    const total = currentAnswers.length;
+    if (match) {
+      const rank = currentAnswers.indexOf(match) + 1;
+      selectedAnswer = { text: text, score: match.count, rank, total };
+    } else {
+      selectedAnswer = { text, score: null, rank: null, total };
+    }
     document.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
     if (match) {
       const idx = currentAnswers.indexOf(match);
       const btns = document.querySelectorAll('.answer-btn');
       if (btns[idx]) btns[idx].classList.add('selected');
     }
-    api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify({ answer: text, score: selectedAnswer.score }) });
+    const payload = { answer: text, score: selectedAnswer.score };
+    if (selectedAnswer.rank != null) { payload.rank = selectedAnswer.rank; payload.total = selectedAnswer.total; }
+    api('/api/tournage/show-answer', { method: 'POST', body: JSON.stringify(payload) });
     $('action-buttons').style.display = '';
-    setStatus('📺 ' + text.toUpperCase(), true);
+    const rankLabel = selectedAnswer.rank != null ? ' (' + selectedAnswer.rank + '/' + total + ')' : '';
+    setStatus('📺 ' + text.toUpperCase() + rankLabel, true);
   };
 
   $('custom-answer-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-show-answer').click(); });
@@ -218,7 +229,8 @@
   $('btn-reveal-score').onclick = () => {
     if (selectedAnswer && selectedAnswer.score != null) {
       api('/api/tournage/reveal-score', { method: 'POST', body: JSON.stringify({}) });
-      setStatus('🎯 Score: ' + selectedAnswer.score, true);
+      const rankLabel = selectedAnswer.rank != null ? ' — ' + selectedAnswer.rank + '/' + selectedAnswer.total : '';
+      setStatus('🎯 Score: ' + selectedAnswer.score + rankLabel, true);
     } else {
       api('/api/tournage/hors-panel', { method: 'POST', body: JSON.stringify({}) });
       setStatus('❌ Hors panel', true);
